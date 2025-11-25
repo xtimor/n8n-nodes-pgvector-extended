@@ -50,6 +50,7 @@ npm install n8n-nodes-postgres-vector-store-tool
 ### Connection and Credentials
 - Use standard **Postgres** credentials in n8n.
 - Connect an embedding node to the dedicated embedding input; the tool will use its output vector for similarity search.
+- Provide a `query` field to the tool input (from an Agent/LLM) – it will be forwarded to the embedding node to generate the search vector.
 
 ### Modes
 
@@ -69,7 +70,7 @@ npm install n8n-nodes-postgres-vector-store-tool
 
 #### 3) Custom SQL Query
 - Only the **SQL Query** field is shown.
-- The tool executes the query directly without additional processing.
+- Optional **Vector Placeholder** (default `{{vector}}`) marks where the embedding parameter should be injected. Each placeholder will be replaced with a numbered `$` parameter that receives the embedding from the connected embedding node.
 
 ## Security Considerations
 
