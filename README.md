@@ -1,33 +1,32 @@
-# n8n-nodes-pgvector-extended
+# Postgres Vector Store Tool (n8n)
 
-Extended n8n PGVector Store node with Row Level Security (RLS) and Custom SQL support.
+AI agent tool for Postgres/pgvector that supports RLS-aware retrieval and custom SQL execution while relying on standard Postgres credentials.
 
 ## Features
 
-### 🔐 Row Level Security (RLS) Support
-- Set PostgreSQL role before executing queries
-- Support RLS policies for multi-tenant applications
-- Role can be set in credentials or per-node basis
+### 🎯 AI Agent Tooling
+- Dedicated Description field to explain usage to connected agents.
+- Requires an embedding node connection and uses provided embeddings for similarity search.
 
-### 🛠️ Custom SQL Queries
-- Execute custom SQL queries directly
-- Full n8n expression support in queries
-- Return results in n8n-compatible format
+### 🔐 RLS Retrieval Mode
+- Automatically sets the provided RLS role using `SET LOCAL ROLE`.
+- Customizable table and column names.
+- Optional metadata inclusion in results.
+- Standard Postgres credentials are used—no custom credential type required.
 
-### 📦 Standard Vector Operations
-- Insert documents with embeddings
-- Retrieve similar documents
-- Full PGVector compatibility
+### 🛠️ Custom SQL Mode
+- Run arbitrary SQL with full n8n expression support.
+- Minimal configuration: only the SQL query field is shown.
 
 ## Installation
 
 ### Via npm (when published)
 ```bash
-npm install n8n-nodes-pgvector-extended
+npm install n8n-nodes-postgres-vector-store-tool
 ```
 
 ### Manual Installation
-1. Clone or download this repository
+1. Clone or download this repository.
 2. Build the node:
    ```bash
    npm install
@@ -37,79 +36,36 @@ npm install n8n-nodes-pgvector-extended
    ```bash
    npm link
    cd ~/.n8n/custom
-   npm link n8n-nodes-pgvector-extended
+   npm link n8n-nodes-postgres-vector-store-tool
    ```
 
 ## Usage
 
-### Setting up RLS Role
+### Connection and Credentials
+- Use standard **Postgres** credentials in n8n.
+- Connect an embedding node to the dedicated embedding input; the tool will use its output vector for similarity search.
 
-#### In Credentials
-1. Create new "Postgres Extended" credentials
-2. Fill in connection details (host, database, user, password)
-3. Optionally set "RLS Role" field
+### Modes
 
-#### In Node Parameters
-- Add "RLS Role (Override)" parameter to override credentials setting
-- Leave empty to use role from credentials
+#### 1) Retrieving with RLS Role
+- Provide the **RLS Role** to be set before querying.
+- Set the **Table Name** and (optionally) override column names in **Options → Column Names**:
+  - **ID** (default: `id`)
+  - **Vector** (default: `embedding`)
+  - **Content** (default: `text`)
+  - **Metadata** (default: `metadata`)
+- Configure **Limit** for the number of rows returned.
+- Toggle **Include Metadata** to include the metadata column in the response.
 
-### Custom SQL Query Example
-
-```sql
-SELECT * FROM n8n_vectors 
-WHERE metadata->>'owner' = '{{$parameter["userId"]}}'
-ORDER BY created_at DESC
-LIMIT 10
-```
-
-### RLS Setup Example
-
-```sql
--- Enable RLS on your table
-ALTER TABLE n8n_vectors ENABLE ROW LEVEL SECURITY;
-
--- Create a policy
-CREATE POLICY user_policy ON n8n_vectors
-  FOR ALL
-  TO app_user
-  USING (metadata->>'owner' = current_setting('app.current_user'));
-
--- Use in n8n with RLS Role set to 'app_user'
-```
-
-## Configuration
-
-### Credentials
-- **Host**: PostgreSQL server hostname
-- **Database**: Database name
-- **User**: Connection username
-- **Password**: Connection password
-- **Port**: PostgreSQL port (default: 5432)
-- **SSL**: SSL connection mode
-- **RLS Role**: Optional PostgreSQL role for RLS
-
-### Node Parameters
-- **Operation**: Choose between Insert, Retrieve, or Custom Query
-- **Table Name**: Vector table name (for insert/retrieve)
-- **RLS Role (Override)**: Override credential role
-- **SQL Query**: Custom SQL for Custom Query operation
+#### 2) Custom SQL Query
+- Only the **SQL Query** field is shown.
+- The tool executes the query directly without additional processing.
 
 ## Security Considerations
 
-⚠️ **RLS Role**: Ensure the role has appropriate privileges. Misconfiguration can lead to data exposure.
-
-⚠️ **Custom SQL**: Only use in trusted workflows. Validate inputs to prevent SQL injection.
+- RLS roles and table/column names are validated to reduce injection risks. Ensure the specified role exists and has the correct permissions.
+- Custom SQL should only be executed in trusted contexts.
 
 ## License
 
 MIT
-
-## Author
-
-Your Name (your.email@example.com)
-
-## Resources
-
-- [n8n Community Nodes Documentation](https://docs.n8n.io/integrations/community-nodes/)
-- [PostgreSQL Row Level Security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
-- [pgvector Extension](https://github.com/pgvector/pgvector)
