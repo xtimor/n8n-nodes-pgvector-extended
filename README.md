@@ -8,6 +8,12 @@ AI agent tool for Postgres/pgvector that supports RLS-aware retrieval and custom
 - Dedicated Description field to explain usage to connected agents.
 - Requires an embedding node connection and uses provided embeddings for similarity search.
 
+### 📥 Regular Retrieval Mode
+- Default mode that performs similarity search without setting an RLS role.
+- Customizable table and column names.
+- Includes metadata in results by default.
+- Standard Postgres credentials are used—no custom credential type required.
+
 ### 🔐 RLS Retrieval Mode
 - Automatically sets the provided RLS role using `SET LOCAL ROLE`.
 - Customizable table and column names.
@@ -47,17 +53,21 @@ npm install n8n-nodes-postgres-vector-store-tool
 
 ### Modes
 
-#### 1) Retrieving with RLS Role
-- Provide the **RLS Role** to be set before querying.
+#### 1) Regular Retrieving (Default)
+- Performs similarity search without setting an RLS role.
 - Set the **Table Name** and (optionally) override column names in **Options → Column Names**:
   - **ID** (default: `id`)
   - **Vector** (default: `embedding`)
   - **Content** (default: `text`)
   - **Metadata** (default: `metadata`)
 - Configure **Limit** for the number of rows returned.
-- Toggle **Include Metadata** to include the metadata column in the response.
+- Toggle **Include Metadata** to control whether metadata is returned (enabled by default).
 
-#### 2) Custom SQL Query
+#### 2) Retrieving with RLS Role
+- Provide the **RLS Role** to be set before querying.
+- All Regular Retrieving options are available, but the query runs within the specified role context.
+
+#### 3) Custom SQL Query
 - Only the **SQL Query** field is shown.
 - The tool executes the query directly without additional processing.
 
