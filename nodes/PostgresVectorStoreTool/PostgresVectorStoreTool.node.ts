@@ -4,6 +4,7 @@ import type {
     INodeType,
     INodeTypeDescription,
 } from 'n8n-workflow';
+import { NodeConnectionTypes } from 'n8n-workflow';
 import { Pool as PgPool } from 'pg';
 
 import { executeCustomQuery, executeWithRole, quoteIdentifier } from '../../utils/rlsHelper';
@@ -39,13 +40,13 @@ export class PostgresVectorStoreTool implements INodeType {
         name: 'postgresVectorStoreTool',
         icon: 'file:postgresVectorStoreTool.svg',
         group: ['transform'],
-        version: 1,
+        version: 2,
         description: 'Vector store retrieval tool with RLS-aware search and custom SQL for AI agents',
         defaults: {
             name: 'Postgres Vector Store Tool',
         },
-        inputs: ['main', 'ai_embedding'],
-        outputs: ['main'],
+        inputs: [NodeConnectionTypes.AiEmbedding],
+        outputs: [NodeConnectionTypes.AiTool],
         credentials: [
             {
                 name: 'postgres',
@@ -153,7 +154,14 @@ export class PostgresVectorStoreTool implements INodeType {
                         displayName: 'Column Names',
                         name: 'columnNames',
                         type: 'fixedCollection',
-                        default: {},
+                        default: {
+                            names: {
+                                id: 'id',
+                                vector: 'embedding',
+                                content: 'text',
+                                metadata: 'metadata',
+                            },
+                        },
                         placeholder: 'Custom column names',
                         options: [
                             {
@@ -256,7 +264,7 @@ export class PostgresVectorStoreTool implements INodeType {
                     };
                 };
 
-                const embeddingItems = this.getInputData(1);
+                const embeddingItems = this.getInputData(0);
                 if (!embeddingItems || embeddingItems.length === 0) {
                     throw new Error('Embedding input is required. Connect an embedding node to provide vectors.');
                 }
