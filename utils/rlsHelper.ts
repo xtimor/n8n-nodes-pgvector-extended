@@ -76,12 +76,13 @@ export async function executeCustomQuery(
     pool: Pool,
     sqlQuery: string,
     role?: string,
+    params: any[] = [],
 ): Promise<INodeExecutionData[]> {
     const executionContext: RLSExecutionContext = { pool, role };
 
     const rows = await executeWithRole(executionContext, async (client) => {
         const queryClient = client || pool;
-        const result = await queryClient.query(sqlQuery);
+        const result = await queryClient.query(sqlQuery, params);
         return result.rows;
     });
 
@@ -92,9 +93,13 @@ export async function executeCustomQuery(
 }
 
 export function quoteIdentifier(value: string): string {
-    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
+    const identifierRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+    const parts = value.split('.');
+
+    if (!parts.every((part) => identifierRegex.test(part))) {
         throw new Error(`Invalid identifier: ${value}`);
     }
 
-    return `"${value}"`;
+    return parts.map((part) => `"${part}"`).join('.');
 }
