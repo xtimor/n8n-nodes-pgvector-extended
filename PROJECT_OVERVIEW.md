@@ -1,35 +1,27 @@
-# 📦 Содержимое проекта n8n-nodes-pgvector-extended
+# 📦 Содержимое проекта n8n-nodes-postgres-vector-store-tool
 
 ## 📂 Структура файлов
 
 ```
-/Users/xtimor/Documents/PGVectorStore/
+/workspace/n8n-nodes-pgvector-extended/
 │
-├── 📄 package.json              # Конфигурация npm пакета
-├── 📄 tsconfig.json             # TypeScript настройки
-├── 📄 gulpfile.js               # Build скрипты
-├── 📄 .prettierrc.js            # Форматирование кода
-├── 📄 .gitignore                # Git ignore
+├── 📄 package.json              # Конфигурация npm пакета и точка входа ноды
+├── 📄 tsconfig.json             # Настройки TypeScript
+├── 📄 gulpfile.js               # Сборка и генерация иконок
 ├── 📄 LICENSE                   # MIT License
 │
 ├── 📚 Документация:
 │   ├── README.md                # Основная документация
-│   ├── QUICKSTART.md            # Быстрый старт ⭐ НАЧНИТЕ ЗДЕСЬ
-│   └── INSTALL_NODEJS.md        # Как установить Node.js
-│
-├── 🚀 Установочные скрипты:
-│   └── install.sh               # Автоматическая установка проекта
-│
-├── 🔐 credentials/
-│   └── PostgresExtended.credentials.ts    # Credentials с RLS полем
+│   ├── QUICKSTART.md            # Быстрый старт
+│   └── INSTALL_NODEJS.md        # Установка Node.js
 │
 ├── 🔧 nodes/
-│   └── VectorStorePGVectorExtended/
-│       ├── VectorStorePGVectorExtended.node.ts   # Главная нода
-│       └── postgres.svg                          # Иконка
+│   └── PostgresVectorStoreTool/
+│       ├── PostgresVectorStoreTool.node.ts   # Главная нода инструмента
+│       └── postgresVectorStoreTool.svg       # Иконка
 │
 ├── 🛠️ utils/
-│   └── rlsHelper.ts             # Утилиты для RLS и SQL
+│   └── rlsHelper.ts             # Утилиты для работы с RLS и SQL
 │
 └── 📊 scripts/
     ├── setup-postgres.sql       # SQL скрипт настройки БД
@@ -42,126 +34,37 @@
 
 ### Основные файлы
 
-- **package.json** - Определяет зависимости и скрипты сборки
-- **tsconfig.json** - Настройки компилятора TypeScript
-- **install.sh** - Автоматизирует установку и сборку проекта
+- **package.json** — Зависимости, скрипты сборки и ссылка на ноду.
+- **tsconfig.json** — Настройки компилятора TypeScript.
+- **install.sh** — Автоматическая установка и сборка проекта.
 
 ### Документация
 
-- **QUICKSTART.md** ⭐ - Пошаговая инструкция от А до Я
-- **INSTALL_NODEJS.md** - 3 способа установить Node.js на macOS
-- **README.md** - Детальная документация API и примеры
+- **QUICKSTART.md** — Пошаговая инструкция по запуску.
+- **INSTALL_NODEJS.md** — Способы установки Node.js.
+- **README.md** — Описание функциональности ноды.
 
 ### Код ноды
 
-1. **credentials/PostgresExtended.credentials.ts**
-   - Расширяет стандартные Postgres credentials
-   - Добавляет поле "RLS Role" для Row Level Security
-
-2. **nodes/.../VectorStorePGVectorExtended.node.ts**
-   - Главный файл ноды (380 строк)
-   - 3 режима: Insert, Retrieve, Custom SQL Query
-   - ExtendedPGVectorStore класс с RLS поддержкой
-
-3. **utils/rlsHelper.ts**
-   - `executeWithRole()` - выполнение с role switching
-   - `executeCustomQuery()` - кастомные SQL запросы
-   - `getRLSRole()` - получение роли из параметров/credentials
+- **nodes/PostgresVectorStoreTool/PostgresVectorStoreTool.node.ts** — инструмент для AI агентов с режимами RLS Retrieval и Custom SQL.
+- **utils/rlsHelper.ts** — `executeWithRole()` для работы с ролями, `executeCustomQuery()` для SQL, `quoteIdentifier()` для валидации идентификаторов.
 
 ### Скрипты установки
 
-1. **scripts/setup-postgres.sql**
-   - Создает базу данных и таблицы
-   - Устанавливает pgvector extension
-   - Настраивает RLS политики
-   - Добавляет тестовые данные
-
-2. **scripts/setup-postgres.sh**
-   - Интерактивный скрипт для запуска .sql файла
-   - Проверяет наличие psql
-   - Запрашивает параметры подключения
+1. **scripts/setup-postgres.sql** — создаёт БД, таблицы и расширение pgvector.
+2. **scripts/setup-postgres.sh** — интерактивный запуск SQL скрипта.
 
 ---
 
 ## 🚀 Следующие шаги (в порядке выполнения)
 
-### 1️⃣ Установите Node.js
-
-Откройте Terminal и выполните:
-
-```bash
-# Через Homebrew (рекомендуется)
-brew install node
-```
-
-Или см. [INSTALL_NODEJS.md](file:///Users/xtimor/Documents/PGVectorStore/INSTALL_NODEJS.md) для других способов.
-
-### 2️⃣ Соберите проект
-
-```bash
-cd /Users/xtimor/Documents/PGVectorStore
-./install.sh
-```
-
-### 3️⃣ Настройте PostgreSQL
-
-```bash
-./scripts/setup-postgres.sh
-```
-
-### 4️⃣ Протестируйте в n8n
-
-См. [QUICKSTART.md](file:///Users/xtimor/Documents/PGVectorStore/QUICKSTART.md) для примеров workflows.
+1. Установите Node.js (см. INSTALL_NODEJS.md при необходимости).
+2. Соберите проект: `./install.sh` в корне репозитория.
+3. Настройте PostgreSQL: `./scripts/setup-postgres.sh`.
+4. Подключите ноду в n8n и используйте как инструмент AI агента.
 
 ---
 
 ## 📋 Чеклист готовности
 
-- [x] ✅ Все исходные файлы созданы
-- [x] ✅ Документация написана
-- [x] ✅ Установочные скрипты готовы
-- [x] ✅ SQL скрипты для PostgreSQL готовы
-- [ ] ⏳ Node.js нужно установить
-- [ ] ⏳ Проект нужно собрать (npm build)
-- [ ] ⏳ PostgreSQL нужно настроить
-- [ ] ⏳ Ноду нужно связать с n8n
-
----
-
-## 💡 Ключевые возможности
-
-### 🔐 Row Level Security (RLS)
-
-```typescript
-// Роль автоматически устанавливается перед запросом
-SET LOCAL ROLE "test_user1";
-SELECT * FROM n8n_vectors;  // Вернет только данные user1
-```
-
-### 🛠️ Custom SQL Queries
-
-```sql
--- С поддержкой n8n expressions
-SELECT * FROM n8n_vectors 
-WHERE metadata->>'owner' = '{{$json["userId"]}}'
-ORDER BY created_at DESC;
-```
-
-### 🔄 Vector Operations
-
-- Insert documents (с RLS)
-- Retrieve similar documents (с RLS)
-- Совместимость с LangChain
-
----
-
-## 🎓 Полезные ссылки
-
-- [n8n Documentation](https://docs.n8n.io/)
-- [PostgreSQL RLS](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
-- [pgvector Extension](https://github.com/pgvector/pgvector)
-- [Node.js Downloads](https://nodejs.org/)
-
----
-
-**Начните с [QUICKSTART.md](file:///Users/xtimor/Documents/PGVectorStore/QUICKSTART.md)** 🚀
+- [x] ✅ Исходники и документация обновлены под Postgres Vector Store Tool.

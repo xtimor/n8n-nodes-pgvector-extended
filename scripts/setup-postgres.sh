@@ -1,82 +1,43 @@
 #!/bin/bash
 
-# PostgreSQL setup helper script
-# This script runs the PostgreSQL setup SQL file
-
 set -e
 
-echo "🐘 PostgreSQL Setup for n8n PGVector Extended"
-echo "=============================================="
-echo ""
+# Default values
+default_host="localhost"
+default_port=5432
+default_database="n8n_pgvector_test"
+default_user="postgres"
+default_password="postgres"
 
-# Check if psql is installed
-if ! command -v psql &> /dev/null; then
-    echo "❌ psql (PostgreSQL client) is not installed!"
-    echo ""
-    echo "Please install PostgreSQL client:"
-    echo "  - macOS: brew install postgresql"
-    echo "  - Ubuntu/Debian: sudo apt-get install postgresql-client"
-    echo ""
-    exit 1
-fi
+echo "🚀 PostgreSQL setup for pgvector"
 
-echo "✅ psql found"
-echo ""
+echo "Enter connection details (press Enter to use default values):"
+read -p "Host ($default_host): " PG_HOST
+PG_HOST=${PG_HOST:-$default_host}
 
-# Get database connection details
-echo "Please provide PostgreSQL connection details:"
-echo ""
+read -p "Port ($default_port): " PG_PORT
+PG_PORT=${PG_PORT:-$default_port}
 
-read -p "Host (default: localhost): " PG_HOST
-PG_HOST=${PG_HOST:-localhost}
+read -p "Database ($default_database): " PG_DATABASE
+PG_DATABASE=${PG_DATABASE:-$default_database}
 
-read -p "Port (default: 5432): " PG_PORT
-PG_PORT=${PG_PORT:-5432}
+read -p "User ($default_user): " PG_USER
+PG_USER=${PG_USER:-$default_user}
 
-read -p "Admin user (default: postgres): " PG_USER
-PG_USER=${PG_USER:-postgres}
-
-read -p "Database to create (default: n8n_pgvector_test): " PG_DATABASE
-PG_DATABASE=${PG_DATABASE:-n8n_pgvector_test}
+read -s -p "Password ($default_password): " PGPASSWORD
+PGPASSWORD=${PGPASSWORD:-$default_password}
 
 echo ""
-echo "📋 Configuration:"
+
+# Export PGPASSWORD for psql
+export PGPASSWORD
+
+echo "Running setup script with the following parameters:"
 echo "  Host: $PG_HOST"
 echo "  Port: $PG_PORT"
-echo "  User: $PG_USER"
 echo "  Database: $PG_DATABASE"
-echo ""
+echo "  User: $PG_USER"
 
-read -p "Proceed with setup? (y/n) " -n 1 -r
-echo ""
-
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Setup cancelled"
-    exit 0
-fi
-
-echo ""
-echo "🔧 Running setup script..."
-echo ""
-
-# Check if database exists, create if not
-DB_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PG_HOST -p $PG_PORT -U $PG_USER -tAc "SELECT 1 FROM pg_database WHERE datname='$PG_DATABASE'" 2>/dev/null || echo "")
-
-if [ "$DB_EXISTS" = "1" ]; then
-    echo "⚠️  Database '$PG_DATABASE' already exists"
-    read -p "Do you want to continue? This will modify the existing database. (y/n) " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Setup cancelled"
-        exit 0
-    fi
-else
-    echo "📦 Creating database '$PG_DATABASE'..."
-    PGPASSWORD=$PGPASSWORD psql -h $PG_HOST -p $PG_PORT -U $PG_USER -c "CREATE DATABASE $PG_DATABASE;"
-fi
-
-echo ""
-echo "🚀 Running setup SQL script..."
 echo ""
 
 # Run the setup script
@@ -96,8 +57,7 @@ echo "  - test_user1 / test_password1"
 echo "  - test_user2 / test_password2"
 echo ""
 echo "💡 Next steps:"
-echo "  1. Configure 'Postgres Extended' credentials in n8n"
-echo "  2. Add the 'PGVector Store Extended' node to a workflow"
-echo "  3. Test Custom SQL Query operation"
-echo "  4. Test RLS by setting different roles"
+echo "  1. Configure standard 'Postgres' credentials in n8n"
+echo "  2. Add the 'Postgres Vector Store Tool' to your agent workflow"
+echo "  3. Test Custom SQL Query or Retrieval with RLS role"
 echo ""

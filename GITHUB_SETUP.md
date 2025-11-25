@@ -30,7 +30,7 @@ git config user.email "john@example.com"
 ### Шаг 2: Создайте репозиторий на GitHub
 
 1. Откройте https://github.com/new
-2. Введите название: `n8n-nodes-pgvector-extended`
+2. Введите название: `n8n-nodes-postgres-vector-store-tool`
 3. Описание: `Extended n8n PGVector Store with RLS and Custom SQL`
 4. **НЕ** создавайте README, .gitignore или LICENSE (они уже есть)
 5. Нажмите **Create repository**
@@ -41,12 +41,12 @@ git config user.email "john@example.com"
 
 **Вариант A: SSH (рекомендуется если настроен SSH ключ)**
 ```bash
-git remote add origin git@github.com:ваш-username/n8n-nodes-pgvector-extended.git
+git remote add origin git@github.com:ваш-username/n8n-nodes-postgres-vector-store-tool.git
 ```
 
 **Вариант B: HTTPS**
 ```bash
-git remote add origin https://github.com/ваш-username/n8n-nodes-pgvector-extended.git
+git remote add origin https://github.com/ваш-username/n8n-nodes-postgres-vector-store-tool.git
 ```
 
 Замените `ваш-username` на ваш GitHub username!
@@ -95,13 +95,13 @@ git config user.email "$GIT_EMAIL"
 
 # 2. Добавьте remote (после создания репозитория на GitHub!)
 read -p "Ваш GitHub username: " GITHUB_USER
-git remote add origin https://github.com/$GITHUB_USER/n8n-nodes-pgvector-extended.git
+git remote add origin https://github.com/$GITHUB_USER/n8n-nodes-postgres-vector-store-tool.git
 
 # 3. Commit и push
 git commit -m "Initial commit: n8n PGVector Extended node with RLS and Custom SQL"
 git push -u origin main
 
-echo "✅ Готово! Проверьте: https://github.com/$GITHUB_USER/n8n-nodes-pgvector-extended"
+echo "✅ Готово! Проверьте: https://github.com/$GITHUB_USER/n8n-nodes-postgres-vector-store-tool"
 ```
 
 ---
@@ -115,8 +115,8 @@ echo "✅ Готово! Проверьте: https://github.com/$GITHUB_USER/n8n-
 git remote -v
 
 # Должно показать:
-# origin  https://github.com/username/n8n-nodes-pgvector-extended.git (fetch)
-# origin  https://github.com/username/n8n-nodes-pgvector-extended.git (push)
+# origin  https://github.com/username/n8n-nodes-postgres-vector-store-tool.git (fetch)
+# origin  https://github.com/username/n8n-nodes-postgres-vector-store-tool.git (push)
 ```
 
 Откройте ваш репозиторий на GitHub - все файлы должны быть там!
@@ -139,7 +139,7 @@ git config user.email "email@example.com"
 git remote remove origin
 
 # Добавьте заново
-git remote add origin https://github.com/username/n8n-nodes-pgvector-extended.git
+git remote add origin https://github.com/username/n8n-nodes-postgres-vector-store-tool.git
 ```
 
 ### Ошибка: "Authentication failed" (для HTTPS)

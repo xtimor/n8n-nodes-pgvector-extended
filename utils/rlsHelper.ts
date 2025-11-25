@@ -90,3 +90,11 @@ export async function executeCustomQuery(
         json: row,
     }));
 }
+
+export function quoteIdentifier(value: string): string {
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
+        throw new Error(`Invalid identifier: ${value}`);
+    }
+
+    return `"${value}"`;
+}

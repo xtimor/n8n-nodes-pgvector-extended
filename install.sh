@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Installation script for n8n-nodes-pgvector-extended
+# Installation script for Postgres Vector Store Tool
 # This script handles the complete installation process
 
 set -e  # Exit on error
 
-echo "🚀 n8n PGVector Extended Node - Installation Script"
+echo "🚀 Postgres Vector Store Tool - Installation Script"
 echo "=================================================="
 echo ""
 
@@ -55,11 +55,11 @@ read -r LINK_CHOICE
 if [ "$LINK_CHOICE" = "y" ] || [ "$LINK_CHOICE" = "Y" ]; then
     echo "Creating npm link..."
     npm link
-    
+
     echo ""
     echo "Now you need to link in your n8n custom folder:"
     echo "  cd ~/.n8n/custom"
-    echo "  npm link n8n-nodes-pgvector-extended"
+    echo "  npm link n8n-nodes-postgres-vector-store-tool"
     echo ""
     echo "After linking, restart n8n:"
     echo "  n8n restart"
@@ -68,7 +68,7 @@ else
     echo "Skipping npm link. You can do it manually later:"
     echo "  npm link"
     echo "  cd ~/.n8n/custom"
-    echo "  npm link n8n-nodes-pgvector-extended"
+    echo "  npm link n8n-nodes-postgres-vector-store-tool"
     echo ""
 fi
 
