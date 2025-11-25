@@ -40,7 +40,7 @@ export class PostgresVectorStoreTool implements INodeType {
         name: 'postgresVectorStoreTool',
         icon: 'file:postgresVectorStoreTool.svg',
         group: ['transform'],
-        version: 2,
+        version: 3,
         description: 'Vector store retrieval tool with RLS-aware search and custom SQL for AI agents',
         defaults: {
             name: 'Postgres Vector Store Tool',
@@ -71,6 +71,12 @@ export class PostgresVectorStoreTool implements INodeType {
                 noDataExpression: true,
                 options: [
                     {
+                        name: 'Regular Retrieving',
+                        value: 'retrieve',
+                        description: 'Perform vector similarity search without RLS role switching',
+                        action: 'Retrieve documents',
+                    },
+                    {
                         name: 'Retrieving with RLS Role',
                         value: 'retrieveRls',
                         description: 'Perform vector similarity search with an RLS role',
@@ -83,7 +89,7 @@ export class PostgresVectorStoreTool implements INodeType {
                         action: 'Execute custom SQL',
                     },
                 ],
-                default: 'retrieveRls',
+                default: 'retrieve',
             },
             {
                 displayName: 'RLS Role',
@@ -104,7 +110,7 @@ export class PostgresVectorStoreTool implements INodeType {
                 type: 'string',
                 displayOptions: {
                     show: {
-                        operation: ['retrieveRls'],
+                        operation: ['retrieve', 'retrieveRls'],
                     },
                 },
                 default: 'n8n_vectors',
@@ -120,7 +126,7 @@ export class PostgresVectorStoreTool implements INodeType {
                 },
                 displayOptions: {
                     show: {
-                        operation: ['retrieveRls'],
+                        operation: ['retrieve', 'retrieveRls'],
                     },
                 },
                 default: 4,
@@ -132,10 +138,10 @@ export class PostgresVectorStoreTool implements INodeType {
                 type: 'boolean',
                 displayOptions: {
                     show: {
-                        operation: ['retrieveRls'],
+                        operation: ['retrieve', 'retrieveRls'],
                     },
                 },
-                default: false,
+                default: true,
                 description: 'Whether to include the metadata column in the response.',
             },
             {
@@ -146,7 +152,7 @@ export class PostgresVectorStoreTool implements INodeType {
                 default: {},
                 displayOptions: {
                     show: {
-                        operation: ['retrieveRls'],
+                        operation: ['retrieve', 'retrieveRls'],
                     },
                 },
                 options: [
@@ -243,7 +249,6 @@ export class PostgresVectorStoreTool implements INodeType {
                 const results = await executeCustomQuery(pool, sqlQuery);
                 returnData.push(...results);
             } else {
-                const rlsRole = ensureValidRole(this.getNodeParameter('rlsRole', 0) as string);
                 const tableName = this.getNodeParameter('tableName', 0) as string;
                 const includeMetadata = this.getNodeParameter('includeMetadata', 0) as boolean;
                 const topK = this.getNodeParameter('topK', 0) as number;
@@ -264,16 +269,35 @@ export class PostgresVectorStoreTool implements INodeType {
                     };
                 };
 
-                const embeddingItems = this.getInputData(0);
-                if (!embeddingItems || embeddingItems.length === 0) {
+                const embeddingFromConnection = await this.getInputConnectionData(
+                    NodeConnectionTypes.AiEmbedding,
+                    0,
+                );
+
+                const embeddingItems = this.getInputData(0, NodeConnectionTypes.AiEmbedding);
+
+                if ((!embeddingItems || embeddingItems.length === 0) && embeddingFromConnection === undefined) {
                     throw new Error('Embedding input is required. Connect an embedding node to provide vectors.');
                 }
 
-                const embeddingVector =
-                    (embeddingItems[0].json as { embedding?: number[]; vector?: number[] }).embedding ??
-                    embeddingItems[0].json.vector;
+                const resolvedEmbedding = (() => {
+                    if (Array.isArray(embeddingFromConnection)) return embeddingFromConnection;
+                    if (
+                        embeddingFromConnection &&
+                        typeof embeddingFromConnection === 'object' &&
+                        Array.isArray((embeddingFromConnection as { embedding?: number[] }).embedding)
+                    ) {
+                        return (embeddingFromConnection as { embedding: number[] }).embedding;
+                    }
 
-                if (!Array.isArray(embeddingVector)) {
+                    const itemEmbedding =
+                        (embeddingItems?.[0]?.json as { embedding?: number[]; vector?: number[] })?.embedding ??
+                        embeddingItems?.[0]?.json?.vector;
+
+                    return itemEmbedding;
+                })();
+
+                if (!Array.isArray(resolvedEmbedding)) {
                     throw new Error('Embedding input must provide an array of numbers in the "embedding" field.');
                 }
 
@@ -297,11 +321,16 @@ FROM ${quotedTable}
 ORDER BY ${quotedVector} <-> $1
 LIMIT $2`;
 
+                const role =
+                    operation === 'retrieveRls'
+                        ? ensureValidRole(this.getNodeParameter('rlsRole', 0) as string)
+                        : undefined;
+
                 const rows = await executeWithRole(
-                    { pool, role: rlsRole },
+                    { pool, role },
                     async (client) => {
                         const queryClient = client || pool;
-                        const result = await queryClient.query(sql, [embeddingVector, topK]);
+                        const result = await queryClient.query(sql, [resolvedEmbedding, topK]);
                         return result.rows;
                     },
                 );
