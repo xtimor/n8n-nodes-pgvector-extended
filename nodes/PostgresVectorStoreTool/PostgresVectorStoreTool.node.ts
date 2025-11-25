@@ -269,7 +269,12 @@ export class PostgresVectorStoreTool implements INodeType {
                     throw new Error('Embedding input must provide an array of numbers in the "embedding" field.');
                 }
 
-                const columnConfig = columnNames.names ?? columnNames;
+                const columnConfig = columnNames.names || {
+                    id: 'id',
+                    vector: 'embedding',
+                    content: 'text',
+                    metadata: 'metadata',
+                };
 
                 const quotedTable = quoteIdentifier(tableName);
                 const quotedId = quoteIdentifier(columnConfig.id || 'id');
