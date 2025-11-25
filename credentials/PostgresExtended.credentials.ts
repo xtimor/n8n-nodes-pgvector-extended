@@ -10,7 +10,7 @@ export class PostgresExtended implements ICredentialType {
 
     documentationUrl = 'postgres';
 
-    icon = 'file:postgres.svg';
+    icon = 'file:postgres.svg' as any;
 
     properties: INodeProperties[] = [
         {

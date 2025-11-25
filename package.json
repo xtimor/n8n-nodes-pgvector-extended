@@ -57,9 +57,6 @@
     "n8n-workflow": "*"
   },
   "dependencies": {
-    "@langchain/community": "^0.0.20",
-    "@langchain/core": "^0.1.10",
-    "n8n-nodes-base": "^1.0.0",
     "pg": "^8.11.0"
   }
 }
