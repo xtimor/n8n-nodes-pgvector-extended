@@ -45,7 +45,7 @@ export class PostgresVectorStoreTool implements INodeType {
         defaults: {
             name: 'Postgres Vector Store Tool',
         },
-        inputs: [NodeConnectionTypes.AiEmbedding],
+        inputs: [NodeConnectionTypes.AiTool, NodeConnectionTypes.AiEmbedding],
         outputs: [NodeConnectionTypes.AiTool],
         credentials: [
             {
@@ -224,6 +224,19 @@ export class PostgresVectorStoreTool implements INodeType {
                 description: 'Custom SQL query to execute. Supports expressions.',
                 placeholder: 'SELECT * FROM my_vectors WHERE metadata->>"owner" = "user"',
             },
+            {
+                displayName: 'Vector Placeholder',
+                name: 'vectorPlaceholder',
+                type: 'string',
+                displayOptions: {
+                    show: {
+                        operation: ['customQuery'],
+                    },
+                },
+                default: '{{vector}}',
+                description:
+                    'Token in the SQL query that will be replaced with the embedding parameter placeholder (e.g. $1).',
+            },
         ],
     };
 
@@ -243,31 +256,21 @@ export class PostgresVectorStoreTool implements INodeType {
         });
 
         try {
-            if (operation === 'customQuery') {
-                const sqlQuery = this.getNodeParameter('sqlQuery', 0) as string;
+            const toolInputItems = this.getInputData(0, NodeConnectionTypes.AiTool);
+            const toolQuery = (toolInputItems?.[0]?.json as { query?: string; text?: string })?.query;
 
-                const results = await executeCustomQuery(pool, sqlQuery);
-                returnData.push(...results);
-            } else {
-                const tableName = this.getNodeParameter('tableName', 0) as string;
-                const includeMetadata = this.getNodeParameter('includeMetadata', 0) as boolean;
-                const topK = this.getNodeParameter('topK', 0) as number;
+            const searchQuery = toolQuery ?? (toolInputItems?.[0]?.json as { text?: string })?.text;
 
-                const columnNames = this.getNodeParameter('options.columnNames', 0, {
-                    names: {
-                        id: 'id',
-                        vector: 'embedding',
-                        content: 'text',
-                        metadata: 'metadata',
-                    },
-                }) as {
-                    names: {
-                        id: string;
-                        vector: string;
-                        content: string;
-                        metadata: string;
-                    };
-                };
+            const resolveEmbedding = async (): Promise<number[]> => {
+                if (!searchQuery) {
+                    throw new Error('A search "query" field is required from the tool input.');
+                }
+
+                const existingEmbeddingInput = this.getInputData(0, NodeConnectionTypes.AiEmbedding);
+
+                if (existingEmbeddingInput.length === 0) {
+                    this.addInputData(NodeConnectionTypes.AiEmbedding, [[{ json: { text: searchQuery, query: searchQuery } }]]);
+                }
 
                 const embeddingFromConnection = await this.getInputConnectionData(
                     NodeConnectionTypes.AiEmbedding,
@@ -300,6 +303,55 @@ export class PostgresVectorStoreTool implements INodeType {
                 if (!Array.isArray(resolvedEmbedding)) {
                     throw new Error('Embedding input must provide an array of numbers in the "embedding" field.');
                 }
+
+                return resolvedEmbedding;
+            };
+
+            if (operation === 'customQuery') {
+                const sqlQuery = this.getNodeParameter('sqlQuery', 0) as string;
+                const vectorPlaceholder = this.getNodeParameter('vectorPlaceholder', 0) as string;
+
+                if (!vectorPlaceholder || vectorPlaceholder.trim() === '') {
+                    throw new Error('Vector Placeholder cannot be empty when using Custom SQL.');
+                }
+
+                const placeholderRegex = new RegExp(vectorPlaceholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+
+                let placeholderCount = 0;
+                const parametrizedSql = sqlQuery.replace(placeholderRegex, () => {
+                    placeholderCount += 1;
+                    return `$${placeholderCount}`;
+                });
+
+                const params =
+                    placeholderCount > 0
+                        ? Array(placeholderCount).fill(await resolveEmbedding())
+                        : [];
+
+                const results = await executeCustomQuery(pool, parametrizedSql, undefined, params);
+                returnData.push(...results);
+            } else {
+                const resolvedEmbedding = await resolveEmbedding();
+
+                const tableName = this.getNodeParameter('tableName', 0) as string;
+                const includeMetadata = this.getNodeParameter('includeMetadata', 0) as boolean;
+                const topK = this.getNodeParameter('topK', 0) as number;
+
+                const columnNames = this.getNodeParameter('options.columnNames', 0, {
+                    names: {
+                        id: 'id',
+                        vector: 'embedding',
+                        content: 'text',
+                        metadata: 'metadata',
+                    },
+                }) as {
+                    names: {
+                        id: string;
+                        vector: string;
+                        content: string;
+                        metadata: string;
+                    };
+                };
 
                 const columnConfig = columnNames.names || {
                     id: 'id',

@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.4.1
+- Forward the incoming query to the embedding input so similarity searches always receive the text to embed.
+- Add vector placeholder handling for custom SQL queries and support schema-qualified identifiers.
+- Improve validation errors when vector placeholders are missing or table identifiers are invalid.
+
 ## 0.4.0
 - Added a default regular retrieval mode without requiring an RLS role while keeping RLS-aware and custom SQL options available.
 - Enabled Include Metadata by default and clarified defaults for the new retrieval mode in the UI and docs.
