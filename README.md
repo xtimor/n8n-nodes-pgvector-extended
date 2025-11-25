@@ -1,23 +1,24 @@
 # n8n-nodes-pgvector-extended
 
-Extended n8n PGVector Store node with Row Level Security (RLS) and Custom SQL support.
+Postgres Vector Store Tool for n8n with Row Level Security (RLS) retrieval and custom SQL support.
 
 ## Features
 
-### 🔐 Row Level Security (RLS) Support
-- Set PostgreSQL role before executing queries
+### 🔐 Row Level Security (RLS) Retrieval
+- Set PostgreSQL role before executing retrieval queries
 - Support RLS policies for multi-tenant applications
 - Role can be set in credentials or per-node basis
+- Works with the dedicated embedding input port to search for similar content
 
 ### 🛠️ Custom SQL Queries
 - Execute custom SQL queries directly
 - Full n8n expression support in queries
 - Return results in n8n-compatible format
 
-### 📦 Standard Vector Operations
-- Insert documents with embeddings
-- Retrieve similar documents
-- Full PGVector compatibility
+### 📦 Vector Search Options
+- Include or exclude metadata in results
+- Override ID/vector/content/metadata column names per table
+- Keep PGVector compatibility for distance calculations
 
 ## Installation
 

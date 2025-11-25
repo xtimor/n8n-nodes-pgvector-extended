@@ -112,14 +112,14 @@ n8n restart
 ### Test 1: Custom SQL Query без RLS
 
 1. Создайте новый workflow
-2. Добавьте ноду **PGVector Store Extended**
+2. Добавьте ноду **Postgres Vector Store Tool**
 3. Настройте:
-   - **Operation**: Custom SQL Query
+   - **Mode**: Custom SQL Query
    - **SQL Query**:
      ```sql
-     SELECT text, metadata, created_at 
-     FROM n8n_vectors 
-     ORDER BY created_at DESC 
+     SELECT text, metadata, created_at
+     FROM n8n_vectors
+     ORDER BY created_at DESC
      LIMIT 5;
      ```
 4. Execute ✅
@@ -134,23 +134,25 @@ n8n restart
 
 **Ожидаемый результат:** Увидите только документы с `owner='user1'`
 
-### Test 3: Динамический SQL с параметрами
+### Test 3: RLS Retrieval с эмбеддингом
 
-1. Добавьте ноду **Set** перед PGVector Extended:
+1. Добавьте ноду **Set** с примерным вектором запроса и опциональной таблицей:
    ```json
    {
-     "owner": "user1",
-     "category": "test"
+     "embedding": [0.12, 0.08, -0.03, 0.25],
+     "tableName": "n8n_vectors"
    }
    ```
-2. В PGVector Extended:
-   - **SQL Query**:
-     ```sql
-     SELECT * FROM n8n_vectors 
-     WHERE metadata->>'owner' = '{{$json["owner"]}}'
-       AND metadata->>'category' = '{{$json["category"]}}';
-     ```
-3. Execute ✅
+2. Добавьте ноду **Postgres Vector Store Tool** и подключите выход **Set** ко второму (Embeddings) входу ноды.
+3. Настройте:
+   - **Mode**: Retrieving with RLS Role
+   - **Table Name**: `={{$json["tableName"] ?? "n8n_vectors"}}`
+   - **Include Metadata**: включено
+   - **Limit**: 3
+   - (Опционально) **RLS Role (Override)**: `test_user1`
+4. Execute ✅
+
+**Ожидаемый результат:** Возвращаются ближайшие документы с расстоянием и, при включенной опции, метаданными. Если указана роль, применяется RLS.
 
 ---
 

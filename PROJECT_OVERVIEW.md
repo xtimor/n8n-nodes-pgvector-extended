@@ -25,7 +25,7 @@
 │
 ├── 🔧 nodes/
 │   └── VectorStorePGVectorExtended/
-│       ├── VectorStorePGVectorExtended.node.ts   # Главная нода
+│       ├── VectorStorePGVectorExtended.node.ts   # Главная нода Postgres Vector Store Tool
 │       └── postgres.svg                          # Иконка
 │
 ├── 🛠️ utils/
@@ -59,8 +59,9 @@
    - Добавляет поле "RLS Role" для Row Level Security
 
 2. **nodes/.../VectorStorePGVectorExtended.node.ts**
-   - Главный файл ноды (380 строк)
-   - 3 режима: Insert, Retrieve, Custom SQL Query
+   - Главный файл ноды (380+ строк)
+   - 2 режима: `Retrieving with RLS Role` (поиск по эмбеддингу с RLS) и `Custom SQL Query`
+   - Требует отдельный вход с эмбеддингом для Retrieval, умеет включать метаданные и переопределять названия колонок
    - ExtendedPGVectorStore класс с RLS поддержкой
 
 3. **utils/rlsHelper.ts**
