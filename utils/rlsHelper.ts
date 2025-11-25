@@ -92,9 +92,24 @@ export async function executeCustomQuery(
 }
 
 export function quoteIdentifier(value: string): string {
+    // Handle schema.table format
+    if (value.includes('.')) {
+        const parts = value.split('.');
+        return parts
+            .map(part => {
+                if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(part)) {
+                    throw new Error(`Invalid identifier part: ${part} in ${value}`);
+                }
+                return `"${part}"`;
+            })
+            .join('.');
+    }
+
+    // Simple identifier
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
         throw new Error(`Invalid identifier: ${value}`);
     }
 
     return `"${value}"`;
 }
+

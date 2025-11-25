@@ -1,13 +1,15 @@
 import type {
-    IExecuteFunctions,
-    INodeExecutionData,
     INodeType,
     INodeTypeDescription,
+    ISupplyDataFunctions,
+    SupplyData,
 } from 'n8n-workflow';
 import { NodeConnectionTypes } from 'n8n-workflow';
 import { Pool as PgPool } from 'pg';
+import { DynamicStructuredTool } from '@langchain/core/tools';
+import { z } from 'zod';
 
-import { executeCustomQuery, executeWithRole, quoteIdentifier } from '../../utils/rlsHelper';
+import { executeWithRole, quoteIdentifier } from '../../utils/rlsHelper';
 
 interface PostgresCredentials {
     host: string;
@@ -61,7 +63,7 @@ export class PostgresVectorStoreTool implements INodeType {
                 typeOptions: {
                     rows: 3,
                 },
-                default: '',
+                default: 'Search for similar documents in the vector database. Provide a search query to find relevant information.',
                 description: 'Describe how the connected AI agent should use this tool.',
             },
             {
@@ -85,7 +87,7 @@ export class PostgresVectorStoreTool implements INodeType {
                     {
                         name: 'Custom SQL Query',
                         value: 'customQuery',
-                        description: 'Run a custom SQL statement',
+                        description: 'Run a custom SQL statement with vector from query',
                         action: 'Execute custom SQL',
                     },
                 ],
@@ -114,7 +116,7 @@ export class PostgresVectorStoreTool implements INodeType {
                     },
                 },
                 default: 'n8n_vectors',
-                description: 'Name of the table where vectors are stored.',
+                description: 'Name of the table where vectors are stored. Supports schema.table format.',
             },
             {
                 displayName: 'Limit',
@@ -220,19 +222,29 @@ export class PostgresVectorStoreTool implements INodeType {
                         operation: ['customQuery'],
                     },
                 },
-                default: 'SELECT * FROM n8n_vectors LIMIT 10',
-                description: 'Custom SQL query to execute. Supports expressions.',
-                placeholder: 'SELECT * FROM my_vectors WHERE metadata->>"owner" = "user"',
+                default: 'SELECT * FROM n8n_vectors ORDER BY embedding <-> $1 LIMIT 10',
+                description: 'Custom SQL query to execute. Use $1 as placeholder for the embedding vector.',
+                placeholder: 'SELECT * FROM my_vectors WHERE metadata->>\'owner\' = \'user\' ORDER BY embedding <-> $1 LIMIT 5',
             },
         ],
     };
 
-    async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
-        const returnData: INodeExecutionData[] = [];
-        const operation = this.getNodeParameter('operation', 0) as string;
-
+    async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
         const credentials = (await this.getCredentials('postgres')) as PostgresCredentials;
+        const operation = this.getNodeParameter('operation', itemIndex) as string;
+        const description = this.getNodeParameter('agentDescription', itemIndex) as string;
 
+        // Get embedding model from input connection
+        const embeddingModel = (await this.getInputConnectionData(
+            NodeConnectionTypes.AiEmbedding,
+            itemIndex,
+        )) as any;
+
+        if (!embeddingModel || typeof embeddingModel.embedQuery !== 'function') {
+            throw new Error('Embedding model is required. Connect an embedding node to the input.');
+        }
+
+        // Create database pool
         const pool = new PgPool({
             host: credentials.host,
             database: credentials.database,
@@ -242,107 +254,105 @@ export class PostgresVectorStoreTool implements INodeType {
             ssl: getSslConfig(credentials.ssl),
         });
 
-        try {
-            if (operation === 'customQuery') {
-                const sqlQuery = this.getNodeParameter('sqlQuery', 0) as string;
+        const tool = new DynamicStructuredTool({
+            name: 'postgres_vector_search',
+            description: description || 'Search for similar documents in the vector database',
+            schema: z.object({
+                query: z.string().describe('The search query to find similar documents'),
+            }),
+            func: async ({ query }: { query: string }) => {
+                try {
+                    // Convert query to embedding vector
+                    const queryVector = await embeddingModel.embedQuery(query);
 
-                const results = await executeCustomQuery(pool, sqlQuery);
-                returnData.push(...results);
-            } else {
-                const tableName = this.getNodeParameter('tableName', 0) as string;
-                const includeMetadata = this.getNodeParameter('includeMetadata', 0) as boolean;
-                const topK = this.getNodeParameter('topK', 0) as number;
-
-                const columnNames = this.getNodeParameter('options.columnNames', 0, {
-                    names: {
-                        id: 'id',
-                        vector: 'embedding',
-                        content: 'text',
-                        metadata: 'metadata',
-                    },
-                }) as {
-                    names: {
-                        id: string;
-                        vector: string;
-                        content: string;
-                        metadata: string;
-                    };
-                };
-
-                const embeddingFromConnection = await this.getInputConnectionData(
-                    NodeConnectionTypes.AiEmbedding,
-                    0,
-                );
-
-                const embeddingItems = this.getInputData(0, NodeConnectionTypes.AiEmbedding);
-
-                if ((!embeddingItems || embeddingItems.length === 0) && embeddingFromConnection === undefined) {
-                    throw new Error('Embedding input is required. Connect an embedding node to provide vectors.');
-                }
-
-                const resolvedEmbedding = (() => {
-                    if (Array.isArray(embeddingFromConnection)) return embeddingFromConnection;
-                    if (
-                        embeddingFromConnection &&
-                        typeof embeddingFromConnection === 'object' &&
-                        Array.isArray((embeddingFromConnection as { embedding?: number[] }).embedding)
-                    ) {
-                        return (embeddingFromConnection as { embedding: number[] }).embedding;
+                    if (!Array.isArray(queryVector)) {
+                        throw new Error('Embedding model did not return a valid vector array');
                     }
 
-                    const itemEmbedding =
-                        (embeddingItems?.[0]?.json as { embedding?: number[]; vector?: number[] })?.embedding ??
-                        embeddingItems?.[0]?.json?.vector;
+                    let results: any[];
 
-                    return itemEmbedding;
-                })();
+                    if (operation === 'customQuery') {
+                        // Custom SQL mode - use $1 placeholder for vector
+                        const sqlQuery = this.getNodeParameter('sqlQuery', itemIndex) as string;
 
-                if (!Array.isArray(resolvedEmbedding)) {
-                    throw new Error('Embedding input must provide an array of numbers in the "embedding" field.');
-                }
+                        const role = undefined; // Custom SQL doesn't use RLS by default
 
-                const columnConfig = columnNames.names || {
-                    id: 'id',
-                    vector: 'embedding',
-                    content: 'text',
-                    metadata: 'metadata',
-                };
+                        results = await executeWithRole(
+                            { pool, role },
+                            async (client) => {
+                                const queryClient = client || pool;
+                                const result = await queryClient.query(sqlQuery, [queryVector]);
+                                return result.rows;
+                            },
+                        );
+                    } else {
+                        // Regular or RLS retrieve mode
+                        const tableName = this.getNodeParameter('tableName', itemIndex) as string;
+                        const includeMetadata = this.getNodeParameter('includeMetadata', itemIndex) as boolean;
+                        const topK = this.getNodeParameter('topK', itemIndex) as number;
 
-                const quotedTable = quoteIdentifier(tableName);
-                const quotedId = quoteIdentifier(columnConfig.id || 'id');
-                const quotedVector = quoteIdentifier(columnConfig.vector || 'embedding');
-                const quotedContent = quoteIdentifier(columnConfig.content || 'text');
-                const quotedMetadata = quoteIdentifier(columnConfig.metadata || 'metadata');
+                        const columnNames = this.getNodeParameter('options.columnNames', itemIndex, {
+                            names: {
+                                id: 'id',
+                                vector: 'embedding',
+                                content: 'text',
+                                metadata: 'metadata',
+                            },
+                        }) as {
+                            names: {
+                                id: string;
+                                vector: string;
+                                content: string;
+                                metadata: string;
+                            };
+                        };
 
-                const metadataSelect = includeMetadata ? `, ${quotedMetadata} AS metadata` : '';
+                        const columnConfig = columnNames.names || {
+                            id: 'id',
+                            vector: 'embedding',
+                            content: 'text',
+                            metadata: 'metadata',
+                        };
 
-                const sql = `SELECT ${quotedId} AS id, ${quotedContent} AS content${metadataSelect}
+                        const quotedTable = quoteIdentifier(tableName);
+                        const quotedId = quoteIdentifier(columnConfig.id || 'id');
+                        const quotedVector = quoteIdentifier(columnConfig.vector || 'embedding');
+                        const quotedContent = quoteIdentifier(columnConfig.content || 'text');
+                        const quotedMetadata = quoteIdentifier(columnConfig.metadata || 'metadata');
+
+                        const metadataSelect = includeMetadata ? `, ${quotedMetadata} AS metadata` : '';
+
+                        const sql = `SELECT ${quotedId} AS id, ${quotedContent} AS content${metadataSelect}
 FROM ${quotedTable}
 ORDER BY ${quotedVector} <-> $1
 LIMIT $2`;
 
-                const role =
-                    operation === 'retrieveRls'
-                        ? ensureValidRole(this.getNodeParameter('rlsRole', 0) as string)
-                        : undefined;
+                        const role =
+                            operation === 'retrieveRls'
+                                ? ensureValidRole(this.getNodeParameter('rlsRole', itemIndex) as string)
+                                : undefined;
 
-                const rows = await executeWithRole(
-                    { pool, role },
-                    async (client) => {
-                        const queryClient = client || pool;
-                        const result = await queryClient.query(sql, [resolvedEmbedding, topK]);
-                        return result.rows;
-                    },
-                );
+                        results = await executeWithRole(
+                            { pool, role },
+                            async (client) => {
+                                const queryClient = client || pool;
+                                const result = await queryClient.query(sql, [queryVector, topK]);
+                                return result.rows;
+                            },
+                        );
+                    }
 
-                rows.forEach((row) => {
-                    returnData.push({ json: row });
-                });
-            }
-        } finally {
-            await pool.end();
-        }
+                    // Return results as JSON string for the AI agent
+                    return JSON.stringify(results, null, 2);
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    throw new Error(`Vector search failed: ${errorMessage}`);
+                }
+            },
+        });
 
-        return [returnData];
+        return {
+            response: tool,
+        };
     }
 }
