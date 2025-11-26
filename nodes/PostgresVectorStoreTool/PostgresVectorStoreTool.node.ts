@@ -5,11 +5,10 @@ import type {
     SupplyData,
 } from 'n8n-workflow';
 import { NodeConnectionTypes } from 'n8n-workflow';
-import { Pool as PgPool } from 'pg';
+import { Client as PgClient } from 'pg';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-
-import { executeWithRole, quoteIdentifier } from '../../utils/rlsHelper';
+import { executeCustomQuery, executeWithRole, quoteIdentifier } from '../../utils/rlsHelper';
 
 interface PostgresCredentials {
     host: string;
@@ -244,16 +243,6 @@ export class PostgresVectorStoreTool implements INodeType {
             throw new Error('Embedding model is required. Connect an embedding node to the input.');
         }
 
-        // Create database pool
-        const pool = new PgPool({
-            host: credentials.host,
-            database: credentials.database,
-            user: credentials.user,
-            password: credentials.password,
-            port: credentials.port,
-            ssl: getSslConfig(credentials.ssl),
-        });
-
         const tool = new DynamicStructuredTool({
             name: 'postgres_vector_search',
             description: description || 'Search for similar documents in the vector database',
@@ -261,7 +250,25 @@ export class PostgresVectorStoreTool implements INodeType {
                 query: z.string().describe('The search query to find similar documents'),
             }),
             func: async ({ query }: { query: string }) => {
+                // Create database client for this execution only
+                // Using Client instead of Pool to ensure we have a single dedicated connection
+                // that is definitely closed after execution.
+                const client = new PgClient({
+                    host: credentials.host,
+                    database: credentials.database,
+                    user: credentials.user,
+                    password: credentials.password,
+                    port: credentials.port,
+                    ssl: getSslConfig(credentials.ssl),
+                });
+
                 try {
+                    await client.connect();
+
+                    if (!query) {
+                        throw new Error('Search query is missing. Please provide a query to search for.');
+                    }
+
                     // Convert query to embedding vector
                     const queryVector = await embeddingModel.embedQuery(query);
 
@@ -277,14 +284,8 @@ export class PostgresVectorStoreTool implements INodeType {
 
                         const role = undefined; // Custom SQL doesn't use RLS by default
 
-                        results = await executeWithRole(
-                            { pool, role },
-                            async (client) => {
-                                const queryClient = client || pool;
-                                const result = await queryClient.query(sqlQuery, [queryVector]);
-                                return result.rows;
-                            },
-                        );
+                        // executeCustomQuery now takes client
+                        results = await executeCustomQuery(client, sqlQuery, role);
                     } else {
                         // Regular or RLS retrieve mode
                         const tableName = this.getNodeParameter('tableName', itemIndex) as string;
@@ -333,9 +334,8 @@ LIMIT $2`;
                                 : undefined;
 
                         results = await executeWithRole(
-                            { pool, role },
-                            async (client) => {
-                                const queryClient = client || pool;
+                            { client, role },
+                            async (queryClient) => {
                                 const result = await queryClient.query(sql, [queryVector, topK]);
                                 return result.rows;
                             },
@@ -347,6 +347,9 @@ LIMIT $2`;
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
                     throw new Error(`Vector search failed: ${errorMessage}`);
+                } finally {
+                    // Always close the client connection
+                    await client.end();
                 }
             },
         });
