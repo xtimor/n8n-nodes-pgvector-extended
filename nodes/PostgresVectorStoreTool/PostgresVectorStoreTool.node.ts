@@ -250,6 +250,7 @@ export class PostgresVectorStoreTool implements INodeType {
                 query: z.string().describe('The search query to find similar documents'),
             }),
             func: async ({ query }: { query: string }) => {
+                console.log('PostgresVectorStoreTool: func called with query:', query);
                 // Create database client for this execution only
                 // Using Client instead of Pool to ensure we have a single dedicated connection
                 // that is definitely closed after execution.
@@ -263,14 +264,18 @@ export class PostgresVectorStoreTool implements INodeType {
                 });
 
                 try {
+                    console.log('PostgresVectorStoreTool: Connecting to database...');
                     await client.connect();
+                    console.log('PostgresVectorStoreTool: Connected to database');
 
                     if (!query) {
                         throw new Error('Search query is missing. Please provide a query to search for.');
                     }
 
                     // Convert query to embedding vector
+                    console.log('PostgresVectorStoreTool: Embedding query...');
                     const queryVector = await embeddingModel.embedQuery(query);
+                    console.log('PostgresVectorStoreTool: Query embedded successfully');
 
                     if (!Array.isArray(queryVector)) {
                         throw new Error('Embedding model did not return a valid vector array');
@@ -285,7 +290,9 @@ export class PostgresVectorStoreTool implements INodeType {
                         const role = undefined; // Custom SQL doesn't use RLS by default
 
                         // executeCustomQuery now takes client
+                        console.log('PostgresVectorStoreTool: Executing custom query...');
                         results = await executeCustomQuery(client, sqlQuery, role);
+                        console.log('PostgresVectorStoreTool: Custom query executed');
                     } else {
                         // Regular or RLS retrieve mode
                         const tableName = this.getNodeParameter('tableName', itemIndex) as string;
@@ -333,6 +340,7 @@ LIMIT $2`;
                                 ? ensureValidRole(this.getNodeParameter('rlsRole', itemIndex) as string)
                                 : undefined;
 
+                        console.log(`PostgresVectorStoreTool: Executing query (Role: ${role || 'None'})...`);
                         results = await executeWithRole(
                             { client, role },
                             async (queryClient) => {
@@ -340,16 +348,21 @@ LIMIT $2`;
                                 return result.rows;
                             },
                         );
+                        console.log('PostgresVectorStoreTool: Query executed successfully');
                     }
 
                     // Return results as JSON string for the AI agent
+                    console.log(`PostgresVectorStoreTool: Returning ${results.length} results`);
                     return JSON.stringify(results, null, 2);
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
+                    console.error('PostgresVectorStoreTool: Error during execution:', errorMessage);
                     throw new Error(`Vector search failed: ${errorMessage}`);
                 } finally {
                     // Always close the client connection
+                    console.log('PostgresVectorStoreTool: Closing database connection...');
                     await client.end();
+                    console.log('PostgresVectorStoreTool: Database connection closed');
                 }
             },
         });
