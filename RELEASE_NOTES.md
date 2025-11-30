@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.5.47
+- **UI Fix**: Embedding input now shows icon in n8n node footer (changed inputs format to object with displayName, maxConnections, required)
+- Added `outputNames: ['Tool']` for proper output labeling
+
 ## 0.5.46
 - **Fix**: Replaced proxy-based wrapper with direct func wrapping (`createWrappedToolFunc`) — now properly intercepts tool execution
 - **Feature**: n8n Output panel now correctly shows tool input/output data

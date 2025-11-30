@@ -66,8 +66,16 @@ export class PostgresVectorStoreTool implements INodeType {
         defaults: {
             name: 'Postgres Vector Store Tool',
         },
-        inputs: [NodeConnectionTypes.AiEmbedding],
+        inputs: [
+            {
+                displayName: 'Embedding',
+                maxConnections: 1,
+                type: NodeConnectionTypes.AiEmbedding,
+                required: true,
+            },
+        ],
         outputs: [NodeConnectionTypes.AiTool],
+        outputNames: ['Tool'],
         credentials: [
             {
                 name: 'postgres',
