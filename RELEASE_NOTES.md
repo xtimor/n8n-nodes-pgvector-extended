@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.5.46
+- **Fix**: Replaced proxy-based wrapper with direct func wrapping (`createWrappedToolFunc`) — now properly intercepts tool execution
+- **Feature**: n8n Output panel now correctly shows tool input/output data
+- **Debug**: Logs now use `[ToolFunc]` prefix for wrapper-related messages
+
 ## 0.5.45
 - **Feature**: Critical database errors now throw `NodeOperationError` and stop workflow (table/column not found, permission denied, connection errors, etc.)
 - **Feature**: Added `isCriticalError()` helper to classify errors
