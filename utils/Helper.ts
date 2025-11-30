@@ -147,7 +147,7 @@ export function createWrappedToolFunc<TInput extends { query: string }>(
                         }));
 
                         context.addOutputData(connectionType, index, [outputItems]);
-                        logger.info('[Tool] Search completed', { resultCount: outputItems.length });
+                        logger.debug('[Tool] Search completed', { resultCount: outputItems.length });
 
                         return response;
                 } catch (error) {
