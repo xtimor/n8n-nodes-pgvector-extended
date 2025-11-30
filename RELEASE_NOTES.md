@@ -1,5 +1,13 @@
 # Release Notes
 
+## 0.6.0
+- **BREAKING**: Removed RLS Role mode - use Custom SQL for advanced use cases
+- **Refactor**: Renamed rlsHelper.ts to Helper.ts
+- **Refactor**: New MyLogger class replaces createLogDebug function
+- **Refactor**: Simplified node architecture, cleaner code
+- **Refactor**: Added comments throughout codebase
+- **UI**: Updated mode names: "Regular Retrieving" → "Vector Search"
+
 ## 0.5.47
 - **UI Fix**: Embedding input now shows icon in n8n node footer (changed inputs format to object with displayName, maxConnections, required)
 - Added `outputNames: ['Tool']` for proper output labeling
