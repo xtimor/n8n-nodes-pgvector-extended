@@ -73,30 +73,38 @@ export function wrapToolForN8nOutput<T extends StructuredTool>(
     tool: T,
     context: ISupplyDataFunctions,
     itemIndex: number,
+    logger: Logger,
 ): T {
+    logger.info('[Wrapper] Creating proxy for tool');
+
     return new Proxy(tool, {
         get: (target, prop) => {
-            // Intercept the _call method which LangChain tools use internally
             if (prop === '_call' && '_call' in target) {
+                logger.info('[Wrapper] _call property accessed, returning interceptor');
+
                 return async (input: unknown, runManager?: unknown, config?: unknown): Promise<string> => {
+                    logger.info('[Wrapper] _call interceptor INVOKED', { input });
+
                     const connectionType = NodeConnectionTypes.AiTool;
 
-                    // Register input data with n8n (this makes the node show up with input)
                     const inputQuery = (input as IDataObject)?.query;
                     const inputPayload: IDataObject = {
                         query: inputQuery !== undefined ? inputQuery : input as IDataObject,
                     };
+
+                    logger.info('[Wrapper] Registering input with n8n', { inputPayload });
                     const { index } = context.addInputData(connectionType, [
                         [{ json: inputPayload }],
                     ]);
+                    logger.info('[Wrapper] Input registered', { index });
 
                     try {
-                        // Call the original _call method using type assertion
+                        logger.info('[Wrapper] Calling original _call method');
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const originalCall = (target as any)._call.bind(target);
                         const response = await originalCall(input, runManager, config);
+                        logger.info('[Wrapper] Original _call returned', { responseLength: (response as string)?.length });
 
-                        // Parse response to create output items
                         let outputData: IDataObject[];
                         try {
                             outputData = JSON.parse(response as string);
@@ -107,23 +115,29 @@ export function wrapToolForN8nOutput<T extends StructuredTool>(
                             outputData = [{ response }];
                         }
 
-                        // Register output data with n8n (this populates the Output panel)
                         const outputItems: INodeExecutionData[] = outputData.map((item) => ({
                             json: item,
                             pairedItem: { item: itemIndex },
                         }));
 
+                        logger.info('[Wrapper] Registering output with n8n', { outputCount: outputItems.length });
                         context.addOutputData(connectionType, index, [outputItems]);
+                        logger.info('[Wrapper] Output registered successfully');
 
                         return response as string;
                     } catch (error) {
                         const errorMessage = error instanceof Error ? error.message : String(error);
+                        logger.info('[Wrapper] Error caught in interceptor', { errorMessage });
 
                         context.addOutputData(connectionType, index, [
                             [{ json: { error: errorMessage }, pairedItem: { item: itemIndex } }],
                         ]);
 
-                        if (isCriticalError(error)) {
+                        const isCritical = isCriticalError(error);
+                        logger.info('[Wrapper] Error classification', { isCritical, errorMessage });
+
+                        if (isCritical) {
+                            logger.info('[Wrapper] Throwing NodeOperationError for critical error');
                             throw new NodeOperationError(
                                 context.getNode(),
                                 errorMessage,
@@ -136,7 +150,6 @@ export function wrapToolForN8nOutput<T extends StructuredTool>(
                 };
             }
 
-            // Return other properties as-is
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const value = (target as any)[prop];
             if (typeof value === 'function') {

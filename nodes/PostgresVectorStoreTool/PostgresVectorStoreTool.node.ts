@@ -468,7 +468,7 @@ LIMIT $2`;
         logDebug('Tool created successfully');
 
         // Wrap tool with n8n output logger to display results in UI Output panel
-        const wrappedTool = wrapToolForN8nOutput(tool, this, itemIndex);
+        const wrappedTool = wrapToolForN8nOutput(tool, this, itemIndex, logger);
 
         logDebug('Returning supply data...');
         return {
