@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.5.40
+- **UI FIX**: Added `addOutputData` call to push execution results to n8n Output panel.
+- Tool execution results are now properly displayed in the n8n UI after the AI agent calls the tool.
+- Each retrieved document is shown as a separate output item in the Output panel.
+
 ## 0.5.37
 - **UI Visibility**: Attempted to force UI updates by marking item status and attaching execution data.
 - **Logging Fix**: Fixed `logDebug` to correctly serialize and display additional info objects in the logs.

@@ -243,6 +243,9 @@ export class PostgresVectorStoreTool implements INodeType {
         const options = this.getNodeParameter('options', itemIndex, {}) as { debug?: boolean };
         const debug = options.debug || false;
 
+        // Capture supplyData context for use in the tool func to push output data to n8n UI
+        const supply = this;
+
         // Capture logger reference for use in the tool func
         const logger = this.logger;
 
@@ -471,14 +474,23 @@ LIMIT $2`;
                     const resultPreview = results.length > 0 ? JSON.stringify(results[0]).substring(0, 200) + '...' : 'No results';
                     logger.info(`Vector search completed. Found ${results.length} results. Preview: ${resultPreview}`);
 
-                    // Attach execution data to the item so it's visible in n8n UI
-                    if (item) {
-                        (item.json as any)._execution = {
-                            query,
-                            results,
-                            timestamp: new Date().toISOString(),
-                        };
+                    // Push output data to n8n UI Output panel
+                    // This is required for AI Tool nodes to display their execution results
+                    const outputItems: INodeExecutionData[] = results.map((row) => ({
+                        json: row,
+                        pairedItem: { item: itemIndex },
+                    }));
+
+                    // If no results, still show an empty output with query info
+                    if (outputItems.length === 0) {
+                        outputItems.push({
+                            json: { query, message: 'No results found', timestamp: new Date().toISOString() },
+                            pairedItem: { item: itemIndex },
+                        });
                     }
+
+                    supply.addOutputData(NodeConnectionTypes.AiTool, itemIndex, [outputItems]);
+                    logDebug(`Output data pushed to n8n UI: ${outputItems.length} items`);
 
                     return JSON.stringify(results, null, 2);
                 } catch (error) {
