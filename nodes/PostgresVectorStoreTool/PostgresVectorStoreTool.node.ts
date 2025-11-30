@@ -25,9 +25,15 @@ interface PostgresCredentials {
     ssl?: string | boolean;
 }
 
-const NODE_VERSION = '0.5.42';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const packageJson = require('../../package.json');
 
 export class PostgresVectorStoreTool implements INodeType {
+    /**
+     * Package version for logging
+     */
+    private static readonly NODE_VERSION: string = packageJson.version;
+
     /**
      * Get SSL configuration from credentials
      */
@@ -262,7 +268,7 @@ export class PostgresVectorStoreTool implements INodeType {
         // Create debug logging function from helper
         const logDebug = createLogDebug(logger, debug);
 
-        logDebug(`Begin... [v${NODE_VERSION}]`);
+        logDebug(`Begin... [v${PostgresVectorStoreTool.NODE_VERSION}]`);
 
         logDebug('Getting embedding model from input connection...');
         // Get embedding model from input connection

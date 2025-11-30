@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.5.43
+- **Refactoring**: `NODE_VERSION` now reads from `package.json` instead of hardcoded constant
+- **Refactoring**: `NODE_VERSION` moved inside class as static readonly property
+
 ## 0.5.42
 - **Refactoring**: Moved `wrapToolForN8nOutput` and `createLogDebug` to helper file
 - **Refactoring**: Moved `getSslConfig` and `ensureValidRole` inside class as static methods
