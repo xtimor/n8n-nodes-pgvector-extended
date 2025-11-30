@@ -1,0 +1,50 @@
+2025-11-30 16:44:26.183	argon.codeit.pro
+Database connection closed
+2025-11-30 16:44:26.181	argon.codeit.pro
+Closing database connection
+2025-11-30 16:44:26.181	argon.codeit.pro
+Error during execution | {"message":"relation \"store_3p._vwa_bc4f9f7c8619a97e5dd65317209c0c27\" does not exist","stack":"error: relation \"store_3p._vwa_bc4f9f7c8619a97e5dd65317209c0c27\" does not exist\n at /home/node/.n8n/nodes/node_modules/n8n-nodes-postgres-vector-store-tool/node_modules/pg/lib/client.js:545:17\n at processTicksAndRejections (node:internal/process/task_queues:105:5)\n at /home/node/.n8n/nodes/node_modules/n8n-nodes-postgres-vector-store-tool/dist/nodes/PostgresVectorStoreTool/PostgresVectorStoreTool.node.js:365:44\n at executeWithRole (/home/node/.n8n/nodes/node_modules/n8n-nodes-postgres-vector-store-tool/dist/utils/rlsHelper.js:117:20)\n at DynamicStructuredTool.func (/home/node/.n8n/nodes/node_modules/n8n-nodes-postgres-vector-store-tool/dist/nodes/PostgresVectorStoreTool/PostgresVectorStoreTool.node.js:364:35)\n at DynamicStructuredTool.call (/home/node/.n8n/nodes/node_modules/n8n-nodes-postgres-vector-store-tool/node_modules/@langchain/core/src/tools/index.ts:284:16)\n at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/langchain@0.3.33_7fa256a816be2513915088df51b0fbd3/node_modules/langchain/dist/agents/executor.cjs:486:27\n at async Promise.all (index 0)\n at AgentExecutor._call (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/langchain@0.3.33_7fa256a816be2513915088df51b0fbd3/node_modules/langchain/dist/agents/executor.cjs:478:30)\n at AgentExecutor.invoke (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/langchain@0.3.33_7fa256a816be2513915088df51b0fbd3/node_modules/langchain/dist/chains/base.cjs:91:28)\n at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+n8n-nodes-langchain@file+packages+@n8n+nodes-langchain_ec7fbe0da3d2dc5c86e61be805f9ba74/node_modules/@n8n/n8n-nodes-langchain/nodes/agents/Agent/agents/ToolsAgent/V2/execute.ts:322:12\n at async Promise.allSettled (index 0)\n at ExecuteContext.toolsAgentExecute (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+n8n-nodes-langchain@file+packages+@n8n+nodes-langchain_ec7fbe0da3d2dc5c86e61be805f9ba74/node_modules/@n8n/n8n-nodes-langchain/nodes/agents/Agent/agents/ToolsAgent/V2/execute.ts:326:24)\n at ExecuteContext.execute (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+n8n-nodes-langchain@file+packages+@n8n+nodes-langchain_ec7fbe0da3d2dc5c86e61be805f9ba74/node_modules/@n8n/n8n-nodes-langchain/nodes/agents/Agent/V2/AgentV2.node.ts:144:10)\n at WorkflowExecute.executeNode (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+sdk-trace-base@1.30_08b575bec2313d5d8a4cc75358971443/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1093:8)\n at WorkflowExecute.runNode (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+sdk-trace-base@1.30_08b575bec2313d5d8a4cc75358971443/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1274:11)\n at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+sdk-trace-base@1.30_08b575bec2313d5d8a4cc75358971443/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1708:27\n at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+sdk-trace-base@1.30_08b575bec2313d5d8a4cc75358971443/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:2324:11","errorType":"DatabaseError","fullError":{"name":"error","message":"relation \"store_3p._vwa_bc4f9f7c8619a97e5dd65317209c0c27\" does not exist","stack":"error: relation \"store_3p._vwa_bc4f9f7c8619a97e5dd65317209c0c27\" does not exist\n at /home/node/.n8n/nodes/node_modules/n8n-nodes-postgres-vector-store-tool/node_modules/pg/lib/client.js:545:17\n at processTicksAndRejections (node:internal/process/task_queues:105:5)\n at /home/node/.n8n/nodes/node_modules/n8n-nodes-postgres-vector-store-tool/dist/nodes/PostgresVectorStoreTool/PostgresVectorStoreTool.node.js:365:44\n at executeWithRole (/home/node/.n8n/nodes/node_modules/n8n-nodes-postgres-vector-store-tool/dist/utils/rlsHelper.js:117:20)\n at DynamicStructuredTool.func (/home/node/.n8n/nodes/node_modules/n8n-nodes-postgres-vector-store-tool/dist/nodes/PostgresVectorStoreTool/PostgresVectorStoreTool.node.js:364:35)\n at DynamicStructuredTool.call (/home/node/.n8n/nodes/node_modules/n8n-nodes-postgres-vector-store-tool/node_modules/@langchain/core/src/tools/index.ts:284:16)\n at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/langchain@0.3.33_7fa256a816be2513915088df51b0fbd3/node_modules/langchain/dist/agents/executor.cjs:486:27\n at async Promise.all (index 0)\n at AgentExecutor._call (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/langchain@0.3.33_7fa256a816be2513915088df51b0fbd3/node_modules/langchain/dist/agents/executor.cjs:478:30)\n at AgentExecutor.invoke (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/langchain@0.3.33_7fa256a816be2513915088df51b0fbd3/node_modules/langchain/dist/chains/base.cjs:91:28)\n at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+n8n-nodes-langchain@file+packages+@n8n+nodes-langchain_ec7fbe0da3d2dc5c86e61be805f9ba74/node_modules/@n8n/n8n-nodes-langchain/nodes/agents/Agent/agents/ToolsAgent/V2/execute.ts:322:12\n at async Promise.allSettled (index 0)\n at ExecuteContext.toolsAgentExecute (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+n8n-nodes-langchain@file+packages+@n8n+nodes-langchain_ec7fbe0da3d2dc5c86e61be805f9ba74/node_modules/@n8n/n8n-nodes-langchain/nodes/agents/Agent/agents/ToolsAgent/V2/execute.ts:326:24)\n at ExecuteContext.execute (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+n8n-nodes-langchain@file+packages+@n8n+nodes-langchain_ec7fbe0da3d2dc5c86e61be805f9ba74/node_modules/@n8n/n8n-nodes-langchain/nodes/agents/Agent/V2/AgentV2.node.ts:144:10)\n at WorkflowExecute.executeNode (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+sdk-trace-base@1.30_08b575bec2313d5d8a4cc75358971443/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1093:8)\n at WorkflowExecute.runNode (/usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+sdk-trace-base@1.30_08b575bec2313d5d8a4cc75358971443/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1274:11)\n at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+sdk-trace-base@1.30_08b575bec2313d5d8a4cc75358971443/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:1708:27\n at /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core@file+packages+core_@opentelemetry+api@1.9.0_@opentelemetry+sdk-trace-base@1.30_08b575bec2313d5d8a4cc75358971443/node_modules/n8n-core/src/execution-engine/workflow-execute.ts:2324:11"}}
+2025-11-30 16:44:26.180	argon.codeit.pro
+Error during execution relation "store_3p._vwa_bc4f9f7c8619a97e5dd65317209c0c27" does not exist
+2025-11-30 16:44:26.180	argon.codeit.pro
+LIMIT $2 | {"topK":30}
+2025-11-30 16:44:26.179	argon.codeit.pro
+ORDER BY "embedding" <=> $1
+2025-11-30 16:44:26.179	argon.codeit.pro
+FROM "store_3p"."_vwa_bc4f9f7c8619a97e5dd65317209c0c27"
+2025-11-30 16:44:26.179	argon.codeit.pro
+Executing query: SELECT "id" AS id, "text" AS content, "metadata" AS metadata
+2025-11-30 16:44:26.178	argon.codeit.pro
+LIMIT $2 -- Role: None -- TopK: 30 -- Vector: [0.05708739,-0.02981098,0.012174217,-0.014938376,-...
+2025-11-30 16:44:26.178	argon.codeit.pro
+ORDER BY "embedding" <=> $1
+2025-11-30 16:44:26.178	argon.codeit.pro
+FROM "store_3p"."_vwa_bc4f9f7c8619a97e5dd65317209c0c27"
+2025-11-30 16:44:26.177	argon.codeit.pro
+Executing Vector Search Query. SQL: SELECT "id" AS id, "text" AS content, "metadata" AS metadata
+2025-11-30 16:44:26.177	argon.codeit.pro
+Query embedded successfully
+2025-11-30 16:44:25.939	argon.codeit.pro
+Embedding query
+2025-11-30 16:44:25.938	argon.codeit.pro
+Connected to database
+2025-11-30 16:44:25.932	argon.codeit.pro
+Connecting to database
+2025-11-30 16:44:25.932	argon.codeit.pro
+func called with query | {"query":"paid leave policy"}
+2025-11-30 16:44:25.188	argon.codeit.pro
+Returning supply data...
+2025-11-30 16:44:25.188	argon.codeit.pro
+Tool created successfully
+2025-11-30 16:44:25.188	argon.codeit.pro
+Creating DynamicStructuredTool...
+2025-11-30 16:44:25.188	argon.codeit.pro
+Embedding model validated successfully
+2025-11-30 16:44:25.188	argon.codeit.pro
+Embedding model extracted | {"embeddingModel":{"caller":{"maxConcurrency":null,"maxRetries":6,"queue":{"_events":{},"_eventsCount":0,"_intervalCount":0,"_intervalEnd":0,"_pendingCount":0,"_carryoverConcurrencyCount":false,"_isIntervalIgnored":true,"_intervalCap":null,"_interval":0,"_queue":{"_queue":[]},"_concurrency":null,"_throwOnTimeout":false,"_isPaused":false}},"apiKey":"AIzaSyD9EXzCUva6KTDgvPyqoOaiMyyXf2meAoI","modelName":"text-embedding-004","model":"text-embedding-004","stripNewLines":true,"maxBatchSize":100,"client":{"apiKey":"AIzaSyD9EXzCUva6KTDgvPyqoOaiMyyXf2meAoI","_requestOptions":{"baseUrl":"https://generativelanguage.googleapis.com"},"model":"models/text-embedding-004","generationConfig":{},"safetySettings":[]}},"type":"object","isNull":false,"isUndefined":false,"keys":["caller","apiKey","modelName","model","taskType","title","stripNewLines","maxBatchSize","client"],"hasEmbedQuery":true,"embeddingModelConstructor":"GoogleGenerativeAIEmbeddings"}
+2025-11-30 16:44:25.188	argon.codeit.pro
+Raw embedding data received | {"type":"object","isArray":true,"length":1,"keys":["0"]}
+2025-11-30 16:44:25.184	argon.codeit.pro
+Getting embedding model from input connection...
+2025-11-30 16:44:25.183	argon.codeit.pro
+Begin... [v0.5.44]
