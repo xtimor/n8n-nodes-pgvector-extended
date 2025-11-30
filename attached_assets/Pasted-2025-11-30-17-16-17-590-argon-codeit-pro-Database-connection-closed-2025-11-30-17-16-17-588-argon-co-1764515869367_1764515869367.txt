@@ -1,0 +1,52 @@
+2025-11-30 17:16:17.590	argon.codeit.pro
+Database connection closed
+2025-11-30 17:16:17.588	argon.codeit.pro
+Closing database connection
+2025-11-30 17:16:17.588	argon.codeit.pro
+Vector search completed. Found 30 results. Preview: {"id":"0caf4add-9aab-40eb-ba4c-3bc3013b3b0f","content":"Unused Extraordinary leave days are not carried over to the following year.\nExtraordinary Leave is available for the new Employee during the pr...
+2025-11-30 17:16:17.588	argon.codeit.pro
+Query executed successfully. Got 30 rows.
+2025-11-30 17:16:17.581	argon.codeit.pro
+LIMIT $2 | {"topK":30}
+2025-11-30 17:16:17.581	argon.codeit.pro
+ORDER BY "embedding" <=> $1
+2025-11-30 17:16:17.581	argon.codeit.pro
+FROM "store_3p"."doc_vectors"
+2025-11-30 17:16:17.580	argon.codeit.pro
+Executing query: SELECT "id" AS id, "text" AS content, "metadata" AS metadata
+2025-11-30 17:16:17.580	argon.codeit.pro
+LIMIT $2 -- Role: None -- TopK: 30 -- Vector: [0.063053295,0.0028270748,0.0050383583,-0.01386338...
+2025-11-30 17:16:17.580	argon.codeit.pro
+ORDER BY "embedding" <=> $1
+2025-11-30 17:16:17.580	argon.codeit.pro
+FROM "store_3p"."doc_vectors"
+2025-11-30 17:16:17.580	argon.codeit.pro
+Executing Vector Search Query. SQL: SELECT "id" AS id, "text" AS content, "metadata" AS metadata
+2025-11-30 17:16:17.579	argon.codeit.pro
+Query embedded successfully
+2025-11-30 17:16:17.323	argon.codeit.pro
+Embedding query
+2025-11-30 17:16:17.322	argon.codeit.pro
+Connected to database
+2025-11-30 17:16:17.315	argon.codeit.pro
+Connecting to database
+2025-11-30 17:16:17.314	argon.codeit.pro
+func called with query | {"query":"information about paid leave"}
+2025-11-30 17:16:16.539	argon.codeit.pro
+Returning supply data...
+2025-11-30 17:16:16.539	argon.codeit.pro
+[Wrapper] Creating proxy for tool
+2025-11-30 17:16:16.539	argon.codeit.pro
+Tool created successfully
+2025-11-30 17:16:16.537	argon.codeit.pro
+Creating DynamicStructuredTool...
+2025-11-30 17:16:16.536	argon.codeit.pro
+Embedding model validated successfully
+2025-11-30 17:16:16.535	argon.codeit.pro
+Embedding model extracted | {"embeddingModel":{"caller":{"maxConcurrency":null,"maxRetries":6,"queue":{"_events":{},"_eventsCount":0,"_intervalCount":0,"_intervalEnd":0,"_pendingCount":0,"_carryoverConcurrencyCount":false,"_isIntervalIgnored":true,"_intervalCap":null,"_interval":0,"_queue":{"_queue":[]},"_concurrency":null,"_throwOnTimeout":false,"_isPaused":false}},"apiKey":"AIzaSyD9EXzCUva6KTDgvPyqoOaiMyyXf2meAoI","modelName":"text-embedding-004","model":"text-embedding-004","stripNewLines":true,"maxBatchSize":100,"client":{"apiKey":"AIzaSyD9EXzCUva6KTDgvPyqoOaiMyyXf2meAoI","_requestOptions":{"baseUrl":"https://generativelanguage.googleapis.com"},"model":"models/text-embedding-004","generationConfig":{},"safetySettings":[]}},"type":"object","isNull":false,"isUndefined":false,"keys":["caller","apiKey","modelName","model","taskType","title","stripNewLines","maxBatchSize","client"],"hasEmbedQuery":true,"embeddingModelConstructor":"GoogleGenerativeAIEmbeddings"}
+2025-11-30 17:16:16.534	argon.codeit.pro
+Raw embedding data received | {"type":"object","isArray":true,"length":1,"keys":["0"]}
+2025-11-30 17:16:16.531	argon.codeit.pro
+Getting embedding model from input connection...
+2025-11-30 17:16:16.531	argon.codeit.pro
+Begin... [v0.5.45]
