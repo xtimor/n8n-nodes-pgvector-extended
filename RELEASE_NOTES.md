@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.6.1
+- **Output**: Removed id field from results
+- **Output**: Renamed content field to text
+
 ## 0.6.0
 - **BREAKING**: Removed RLS Role mode - use Custom SQL for advanced use cases
 - **Refactor**: Renamed rlsHelper.ts to Helper.ts

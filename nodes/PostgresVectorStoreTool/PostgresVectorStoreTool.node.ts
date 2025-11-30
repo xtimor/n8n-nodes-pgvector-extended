@@ -330,10 +330,10 @@ export class PostgresVectorStoreTool implements INodeType {
                                         }) as { names: ColumnConfig };
                                         const cols = columnNames.names || PostgresVectorStoreTool.DEFAULT_COLUMNS;
 
-                                        // Build SQL query
+                                        // Build SQL query - return text field only (no id)
                                         const metadataCol = includeMetadata ? `, ${quoteIdentifier(cols.metadata)} AS metadata` : '';
                                         const sql = `
-                                                SELECT ${quoteIdentifier(cols.id)} AS id, ${quoteIdentifier(cols.content)} AS content${metadataCol}
+                                                SELECT ${quoteIdentifier(cols.content)} AS text${metadataCol}
                                                 FROM ${quoteIdentifier(tableName)}
                                                 ORDER BY ${quoteIdentifier(cols.vector)} <=> $1
                                                 LIMIT $2

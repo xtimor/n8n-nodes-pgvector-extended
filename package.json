@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-postgres-vector-store-tool",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "AI agent Postgres vector store tool with vector search and custom SQL capabilities",
   "keywords": [
     "n8n-community-node-package",
