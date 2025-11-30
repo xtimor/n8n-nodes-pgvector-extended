@@ -4,7 +4,7 @@ import type {
     ISupplyDataFunctions,
     IDataObject,
 } from 'n8n-workflow';
-import { NodeConnectionTypes } from 'n8n-workflow';
+import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import type { PoolClient, Client } from 'pg';
 import type { StructuredTool } from '@langchain/core/tools';
 
@@ -16,6 +16,29 @@ export interface RLSExecutionContext {
 export interface Logger {
     info: (message: string, meta?: object) => void;
     error: (message: string, meta?: object) => void;
+}
+
+const CRITICAL_ERROR_PATTERNS = [
+    /relation .* does not exist/i,
+    /table .* does not exist/i,
+    /column .* does not exist/i,
+    /database .* does not exist/i,
+    /permission denied/i,
+    /authentication failed/i,
+    /password authentication failed/i,
+    /connection refused/i,
+    /ECONNREFUSED/i,
+    /ENOTFOUND/i,
+    /ETIMEDOUT/i,
+    /no pg_hba\.conf entry/i,
+    /SSL.*required/i,
+    /role .* does not exist/i,
+    /Invalid identifier/i,
+];
+
+export function isCriticalError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return CRITICAL_ERROR_PATTERNS.some(pattern => pattern.test(message));
 }
 
 /**
@@ -94,11 +117,20 @@ export function wrapToolForN8nOutput<T extends StructuredTool>(
 
                         return response as string;
                     } catch (error) {
-                        // Register error output with n8n
                         const errorMessage = error instanceof Error ? error.message : String(error);
+
                         context.addOutputData(connectionType, index, [
                             [{ json: { error: errorMessage }, pairedItem: { item: itemIndex } }],
                         ]);
+
+                        if (isCriticalError(error)) {
+                            throw new NodeOperationError(
+                                context.getNode(),
+                                errorMessage,
+                                { itemIndex },
+                            );
+                        }
+
                         throw error;
                     }
                 };
