@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-postgres-vector-store-tool",
-  "version": "0.5.1",
+  "version": "0.5.37",
   "description": "AI agent Postgres vector store tool with RLS retrieval and custom SQL capabilities",
   "keywords": [
     "n8n-community-node-package",
@@ -22,7 +22,7 @@
     "type": "git",
     "url": "git+https://github.com/xtimor/n8n-nodes-pgvector-extended.git"
   },
-  "main": "index.js",
+  "main": "dist/nodes/PostgresVectorStoreTool/PostgresVectorStoreTool.node.js",
   "scripts": {
     "build": "tsc && gulp build:icons",
     "dev": "tsc --watch",
@@ -54,6 +54,8 @@
     "n8n-workflow": "*"
   },
   "dependencies": {
-    "pg": "^8.11.0"
+    "@langchain/core": "^1.1.0",
+    "pg": "^8.11.0",
+    "zod": "^4.1.13"
   }
 }

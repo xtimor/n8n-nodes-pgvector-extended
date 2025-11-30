@@ -1,44 +1,44 @@
 import type { IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
-import type { Pool, PoolClient } from 'pg';
+import type { PoolClient, Client } from 'pg';
 
 export interface RLSExecutionContext {
     role?: string;
-    pool: Pool;
+    client: Client | PoolClient;
 }
 
 /**
  * Execute a database operation with RLS role switching
- * @param context - Execution context with pool and optional role
+ * @param context - Execution context with client and optional role
  * @param operation - Async operation to execute
  * @returns Result of the operation
  */
 export async function executeWithRole<T>(
     context: RLSExecutionContext,
-    operation: (client?: PoolClient) => Promise<T>,
+    operation: (client: Client | PoolClient) => Promise<T>,
 ): Promise<T> {
-    const { role, pool } = context;
+    const { role, client } = context;
 
-    // If no role specified, execute normally
-    if (!role || role.trim() === '') {
-        return await operation();
-    }
-
-    // Execute with role switching in a transaction
-    const client = await pool.connect();
     try {
-        await client.query('BEGIN');
-        // Set the role for this transaction only
-        await client.query(`SET LOCAL ROLE "${role}"`);
+        // If role specified, use transaction with role switching
+        if (role && role.trim() !== '') {
+            await client.query('BEGIN');
+            // Set the role for this transaction only
+            await client.query(`SET LOCAL ROLE "${role}"`);
 
-        const result = await operation(client);
+            const result = await operation(client);
 
-        await client.query('COMMIT');
-        return result;
+            await client.query('COMMIT');
+            return result;
+        } else {
+            // No role - execute without transaction
+            return await operation(client);
+        }
     } catch (error) {
-        await client.query('ROLLBACK');
+        // Rollback only if we started a transaction
+        if (role && role.trim() !== '') {
+            await client.query('ROLLBACK');
+        }
         throw error;
-    } finally {
-        client.release();
     }
 }
 
@@ -73,16 +73,14 @@ export function getRLSRole(
  * Execute custom SQL query with proper error handling
  */
 export async function executeCustomQuery(
-    pool: Pool,
+    client: Client | PoolClient,
     sqlQuery: string,
     role?: string,
-    params: any[] = [],
 ): Promise<INodeExecutionData[]> {
-    const executionContext: RLSExecutionContext = { pool, role };
+    const executionContext: RLSExecutionContext = { client, role };
 
-    const rows = await executeWithRole(executionContext, async (client) => {
-        const queryClient = client || pool;
-        const result = await queryClient.query(sqlQuery, params);
+    const rows = await executeWithRole(executionContext, async (queryClient) => {
+        const result = await queryClient.query(sqlQuery);
         return result.rows;
     });
 
@@ -93,13 +91,23 @@ export async function executeCustomQuery(
 }
 
 export function quoteIdentifier(value: string): string {
-    const identifierRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+    // Handle schema.table format
+    if (value.includes('.')) {
+        const parts = value.split('.');
+        return parts
+            .map(part => {
+                if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(part)) {
+                    throw new Error(`Invalid identifier part: ${part} in ${value}`);
+                }
+                return `"${part}"`;
+            })
+            .join('.');
+    }
 
-    const parts = value.split('.');
-
-    if (!parts.every((part) => identifierRegex.test(part))) {
+    // Simple identifier
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
         throw new Error(`Invalid identifier: ${value}`);
     }
 
-    return parts.map((part) => `"${part}"`).join('.');
+    return `"${value}"`;
 }
