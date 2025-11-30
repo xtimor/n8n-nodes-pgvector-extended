@@ -1,5 +1,12 @@
 # Release Notes
 
+## 0.5.41
+- **UI FIX**: Implemented proper `wrapToolForN8nOutput` Proxy wrapper (like n8n's internal `logWrapper`)
+- Wrapper intercepts `_call` method on DynamicStructuredTool
+- Calls `addInputData` before execution (registers input with n8n)
+- Calls `addOutputData` after execution (populates Output panel)
+- Proper error handling with output registration for failed executions
+
 ## 0.5.40
 - **UI FIX**: Added `addOutputData` call to push execution results to n8n Output panel.
 - Tool execution results are now properly displayed in the n8n UI after the AI agent calls the tool.

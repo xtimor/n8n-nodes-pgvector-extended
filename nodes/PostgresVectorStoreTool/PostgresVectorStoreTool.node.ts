@@ -4,12 +4,82 @@ import type {
     ISupplyDataFunctions,
     SupplyData,
     INodeExecutionData,
+    IDataObject,
 } from 'n8n-workflow';
 import { NodeConnectionTypes } from 'n8n-workflow';
 import { Client as PgClient } from 'pg';
-import { DynamicStructuredTool } from '@langchain/core/tools';
+import { DynamicStructuredTool, StructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { executeCustomQuery, executeWithRole, quoteIdentifier } from '../../utils/rlsHelper';
+
+/**
+ * Wraps a LangChain tool to log input/output data to n8n UI.
+ * This is similar to n8n's internal logWrapper but simplified for our use case.
+ * The wrapper intercepts the _call method to register input/output with n8n.
+ */
+function wrapToolForN8nOutput<T extends StructuredTool>(
+    tool: T,
+    context: ISupplyDataFunctions,
+    itemIndex: number,
+): T {
+    return new Proxy(tool, {
+        get: (target, prop) => {
+            // Intercept the _call method which LangChain tools use internally
+            if (prop === '_call' && '_call' in target) {
+                return async (input: any, runManager?: any, config?: any): Promise<string> => {
+                    const connectionType = NodeConnectionTypes.AiTool;
+
+                    // Register input data with n8n (this makes the node show up with input)
+                    const inputPayload: IDataObject = { query: input?.query || input };
+                    const { index } = context.addInputData(connectionType, [
+                        [{ json: inputPayload }],
+                    ]);
+
+                    try {
+                        // Call the original _call method
+                        const originalCall = (target as any)._call.bind(target);
+                        const response = await originalCall(input, runManager, config);
+
+                        // Parse response to create output items
+                        let outputData: IDataObject[];
+                        try {
+                            outputData = JSON.parse(response);
+                            if (!Array.isArray(outputData)) {
+                                outputData = [{ response: outputData }];
+                            }
+                        } catch {
+                            outputData = [{ response }];
+                        }
+
+                        // Register output data with n8n (this populates the Output panel)
+                        const outputItems: INodeExecutionData[] = outputData.map((item) => ({
+                            json: item,
+                            pairedItem: { item: itemIndex },
+                        }));
+
+                        context.addOutputData(connectionType, index, [outputItems]);
+
+                        return response;
+                    } catch (error) {
+                        // Register error output with n8n
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        context.addOutputData(connectionType, index, [
+                            [{ json: { error: errorMessage }, pairedItem: { item: itemIndex } }],
+                        ]);
+                        throw error;
+                    }
+                };
+            }
+
+            // Return other properties as-is
+            const value = (target as any)[prop];
+            if (typeof value === 'function') {
+                return value.bind(target);
+            }
+            return value;
+        },
+    }) as T;
+}
 
 interface PostgresCredentials {
     host: string;
@@ -243,15 +313,13 @@ export class PostgresVectorStoreTool implements INodeType {
         const options = this.getNodeParameter('options', itemIndex, {}) as { debug?: boolean };
         const debug = options.debug || false;
 
-        // Capture supplyData context for use in the tool func to push output data to n8n UI
-        const supply = this;
-
         // Capture logger reference for use in the tool func
         const logger = this.logger;
 
         let item: INodeExecutionData | undefined;
 
         try {
+            // Fetch data from input and initialize an item to mark tool status
             const input = this.getInputData(itemIndex) as unknown;
             if (Array.isArray(input)) {
                 item = input[0] as INodeExecutionData;
@@ -266,39 +334,23 @@ export class PostgresVectorStoreTool implements INodeType {
         } catch (error) {
             // Ignore error if input cannot be retrieved (e.g. no input connection)
             if (debug) {
-                logger.debug('Could not get input item for logging', { error });
+                logger.error('Could not get input item for logging', { error });
             }
         }
 
-
-
-
         const logDebug = (message: string, info?: any) => {
             let logMessage = message;
-            if (info !== undefined) {
-                try {
-                    const infoStr = typeof info === 'object' ? JSON.stringify(info) : String(info);
-                    logMessage = `${message} | ${infoStr}`;
-                } catch (e) {
-                    logMessage = `${message} | [Error serializing info]`;
+            if (debug) {
+                if (info !== undefined) {
+                    try {
+                        const infoStr = typeof info === 'object' ? JSON.stringify(info) : String(info);
+                        logMessage = `${message} | ${infoStr}`;
+                    } catch (e) {
+                        logMessage = `${message} | [Error serializing info]`;
+                    }
                 }
-            }
-
-            logger.info(logMessage);
-
-            if (debug && item) {
-                if (!(item.json as any)._debug) {
-                    (item.json as any)._debug = { logs: [] };
-                }
-                const debugData = (item.json as any)._debug;
-                if (!debugData.logs) {
-                    debugData.logs = [];
-                }
-                debugData.logs.push({
-                    timestamp: new Date().toISOString(),
-                    message,
-                    info,
-                });
+    
+                logger.info(logMessage);
             }
         };
 
@@ -472,26 +524,10 @@ LIMIT $2`;
 
                     // Return results as JSON string for the AI agent
                     const resultPreview = results.length > 0 ? JSON.stringify(results[0]).substring(0, 200) + '...' : 'No results';
-                    logger.info(`Vector search completed. Found ${results.length} results. Preview: ${resultPreview}`);
+                    logDebug(`Vector search completed. Found ${results.length} results. Preview: ${resultPreview}`);
 
-                    // Push output data to n8n UI Output panel
-                    // This is required for AI Tool nodes to display their execution results
-                    const outputItems: INodeExecutionData[] = results.map((row) => ({
-                        json: row,
-                        pairedItem: { item: itemIndex },
-                    }));
-
-                    // If no results, still show an empty output with query info
-                    if (outputItems.length === 0) {
-                        outputItems.push({
-                            json: { query, message: 'No results found', timestamp: new Date().toISOString() },
-                            pairedItem: { item: itemIndex },
-                        });
-                    }
-
-                    supply.addOutputData(NodeConnectionTypes.AiTool, itemIndex, [outputItems]);
-                    logDebug(`Output data pushed to n8n UI: ${outputItems.length} items`);
-
+                    // Output data is now handled by wrapToolForN8nOutput wrapper
+                    // which intercepts _call and registers input/output with n8n UI
                     return JSON.stringify(results, null, 2);
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -517,9 +553,12 @@ LIMIT $2`;
 
         logDebug('Tool created successfully');
 
+        // Wrap tool with n8n output logger to display results in UI Output panel
+        const wrappedTool = wrapToolForN8nOutput(tool, this, itemIndex);
+
         logDebug('Returning supply data...');
         return {
-            response: tool,
+            response: wrappedTool,
         };
     }
 }
