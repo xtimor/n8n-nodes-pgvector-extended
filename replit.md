@@ -7,6 +7,8 @@ The project is built as a TypeScript-based n8n node package that can be publishe
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
+Git workflow: Work in branch `replit-code-generator`, user handles git push manually.
+Publishing: Never publish to npm without explicit user permission.
 
 # System Architecture
 
