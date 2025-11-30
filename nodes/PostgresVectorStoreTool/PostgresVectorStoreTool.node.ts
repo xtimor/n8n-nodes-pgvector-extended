@@ -3,83 +3,18 @@ import type {
     INodeTypeDescription,
     ISupplyDataFunctions,
     SupplyData,
-    INodeExecutionData,
-    IDataObject,
 } from 'n8n-workflow';
 import { NodeConnectionTypes } from 'n8n-workflow';
 import { Client as PgClient } from 'pg';
-import { DynamicStructuredTool, StructuredTool } from '@langchain/core/tools';
+import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { executeCustomQuery, executeWithRole, quoteIdentifier } from '../../utils/rlsHelper';
-
-/**
- * Wraps a LangChain tool to log input/output data to n8n UI.
- * This is similar to n8n's internal logWrapper but simplified for our use case.
- * The wrapper intercepts the _call method to register input/output with n8n.
- */
-function wrapToolForN8nOutput<T extends StructuredTool>(
-    tool: T,
-    context: ISupplyDataFunctions,
-    itemIndex: number,
-): T {
-    return new Proxy(tool, {
-        get: (target, prop) => {
-            // Intercept the _call method which LangChain tools use internally
-            if (prop === '_call' && '_call' in target) {
-                return async (input: any, runManager?: any, config?: any): Promise<string> => {
-                    const connectionType = NodeConnectionTypes.AiTool;
-
-                    // Register input data with n8n (this makes the node show up with input)
-                    const inputPayload: IDataObject = { query: input?.query || input };
-                    const { index } = context.addInputData(connectionType, [
-                        [{ json: inputPayload }],
-                    ]);
-
-                    try {
-                        // Call the original _call method
-                        const originalCall = (target as any)._call.bind(target);
-                        const response = await originalCall(input, runManager, config);
-
-                        // Parse response to create output items
-                        let outputData: IDataObject[];
-                        try {
-                            outputData = JSON.parse(response);
-                            if (!Array.isArray(outputData)) {
-                                outputData = [{ response: outputData }];
-                            }
-                        } catch {
-                            outputData = [{ response }];
-                        }
-
-                        // Register output data with n8n (this populates the Output panel)
-                        const outputItems: INodeExecutionData[] = outputData.map((item) => ({
-                            json: item,
-                            pairedItem: { item: itemIndex },
-                        }));
-
-                        context.addOutputData(connectionType, index, [outputItems]);
-
-                        return response;
-                    } catch (error) {
-                        // Register error output with n8n
-                        const errorMessage = error instanceof Error ? error.message : String(error);
-                        context.addOutputData(connectionType, index, [
-                            [{ json: { error: errorMessage }, pairedItem: { item: itemIndex } }],
-                        ]);
-                        throw error;
-                    }
-                };
-            }
-
-            // Return other properties as-is
-            const value = (target as any)[prop];
-            if (typeof value === 'function') {
-                return value.bind(target);
-            }
-            return value;
-        },
-    }) as T;
-}
+import {
+    executeCustomQuery,
+    executeWithRole,
+    quoteIdentifier,
+    createLogDebug,
+    wrapToolForN8nOutput,
+} from '../../utils/rlsHelper';
 
 interface PostgresCredentials {
     host: string;
@@ -90,23 +25,31 @@ interface PostgresCredentials {
     ssl?: string | boolean;
 }
 
-function getSslConfig(ssl?: string | boolean) {
-    if (typeof ssl === 'string') {
-        return ssl === 'disable' ? false : { rejectUnauthorized: false };
-    }
-
-    return ssl ?? false;
-}
-
-function ensureValidRole(role: string): string {
-    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(role)) {
-        throw new Error('RLS Role must contain only letters, numbers, and underscores, and cannot start with a number.');
-    }
-
-    return role;
-}
+const NODE_VERSION = '0.5.42';
 
 export class PostgresVectorStoreTool implements INodeType {
+    /**
+     * Get SSL configuration from credentials
+     */
+    private static getSslConfig(ssl?: string | boolean): boolean | { rejectUnauthorized: boolean } {
+        if (typeof ssl === 'string') {
+            return ssl === 'disable' ? false : { rejectUnauthorized: false };
+        }
+        return ssl ?? false;
+    }
+
+    /**
+     * Validate RLS role name to prevent SQL injection
+     */
+    private static ensureValidRole(role: string): string {
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(role)) {
+            throw new Error(
+                'RLS Role must contain only letters, numbers, and underscores, and cannot start with a number.',
+            );
+        }
+        return role;
+    }
+
     description: INodeTypeDescription = {
         displayName: 'Postgres Vector Store Tool',
         name: 'postgresVectorStoreTool',
@@ -316,45 +259,10 @@ export class PostgresVectorStoreTool implements INodeType {
         // Capture logger reference for use in the tool func
         const logger = this.logger;
 
-        let item: INodeExecutionData | undefined;
+        // Create debug logging function from helper
+        const logDebug = createLogDebug(logger, debug);
 
-        try {
-            // Fetch data from input and initialize an item to mark tool status
-            const input = this.getInputData(itemIndex) as unknown;
-            if (Array.isArray(input)) {
-                item = input[0] as INodeExecutionData;
-            } else {
-                item = input as INodeExecutionData;
-            }
-
-            // Mark item as initialized to test UI persistence
-            if (item && item.json) {
-                (item.json as any)._toolStatus = 'Initialized';
-            }
-        } catch (error) {
-            // Ignore error if input cannot be retrieved (e.g. no input connection)
-            if (debug) {
-                logger.error('Could not get input item for logging', { error });
-            }
-        }
-
-        const logDebug = (message: string, info?: any) => {
-            let logMessage = message;
-            if (debug) {
-                if (info !== undefined) {
-                    try {
-                        const infoStr = typeof info === 'object' ? JSON.stringify(info) : String(info);
-                        logMessage = `${message} | ${infoStr}`;
-                    } catch (e) {
-                        logMessage = `${message} | [Error serializing info]`;
-                    }
-                }
-    
-                logger.info(logMessage);
-            }
-        };
-
-        logDebug('Begin...');
+        logDebug(`Begin... [v${NODE_VERSION}]`);
 
         logDebug('Getting embedding model from input connection...');
         // Get embedding model from input connection
@@ -414,7 +322,7 @@ export class PostgresVectorStoreTool implements INodeType {
                     user: credentials.user,
                     password: credentials.password,
                     port: credentials.port,
-                    ssl: getSslConfig(credentials.ssl),
+                    ssl: PostgresVectorStoreTool.getSslConfig(credentials.ssl),
                 });
 
                 try {
@@ -503,7 +411,7 @@ LIMIT $2`;
 
                         const role =
                             operation === 'retrieveRls'
-                                ? ensureValidRole(this.getNodeParameter('rlsRole', itemIndex) as string)
+                                ? PostgresVectorStoreTool.ensureValidRole(this.getNodeParameter('rlsRole', itemIndex) as string)
                                 : undefined;
 
                         // Log the actual query for debugging quality issues - EMBEDDED IN MESSAGE

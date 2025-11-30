@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.5.42
+- **Refactoring**: Moved `wrapToolForN8nOutput` and `createLogDebug` to helper file
+- **Refactoring**: Moved `getSslConfig` and `ensureValidRole` inside class as static methods
+- **Improvement**: Debug log now shows node version: `Begin... [v0.5.42]`
+
 ## 0.5.41
 - **UI FIX**: Implemented proper `wrapToolForN8nOutput` Proxy wrapper (like n8n's internal `logWrapper`)
 - Wrapper intercepts `_call` method on DynamicStructuredTool

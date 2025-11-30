@@ -1,9 +1,118 @@
-import type { IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
+import type {
+    IExecuteFunctions,
+    INodeExecutionData,
+    ISupplyDataFunctions,
+    IDataObject,
+} from 'n8n-workflow';
+import { NodeConnectionTypes } from 'n8n-workflow';
 import type { PoolClient, Client } from 'pg';
+import type { StructuredTool } from '@langchain/core/tools';
 
 export interface RLSExecutionContext {
     role?: string;
     client: Client | PoolClient;
+}
+
+export interface Logger {
+    info: (message: string, meta?: object) => void;
+    error: (message: string, meta?: object) => void;
+}
+
+/**
+ * Creates a debug logging function that only logs when debug mode is enabled.
+ * @param logger - The n8n logger instance
+ * @param debug - Whether debug mode is enabled
+ * @returns A function that logs messages when debug is true
+ */
+export function createLogDebug(logger: Logger, debug: boolean) {
+    return (message: string, info?: unknown) => {
+        if (!debug) return;
+
+        let logMessage = message;
+        if (info !== undefined) {
+            try {
+                const infoStr = typeof info === 'object' ? JSON.stringify(info) : String(info);
+                logMessage = `${message} | ${infoStr}`;
+            } catch {
+                logMessage = `${message} | [Error serializing info]`;
+            }
+        }
+        logger.info(logMessage);
+    };
+}
+
+/**
+ * Wraps a LangChain tool to log input/output data to n8n UI.
+ * This is similar to n8n's internal logWrapper but simplified for our use case.
+ * The wrapper intercepts the _call method to register input/output with n8n.
+ */
+export function wrapToolForN8nOutput<T extends StructuredTool>(
+    tool: T,
+    context: ISupplyDataFunctions,
+    itemIndex: number,
+): T {
+    return new Proxy(tool, {
+        get: (target, prop) => {
+            // Intercept the _call method which LangChain tools use internally
+            if (prop === '_call' && '_call' in target) {
+                return async (input: unknown, runManager?: unknown, config?: unknown): Promise<string> => {
+                    const connectionType = NodeConnectionTypes.AiTool;
+
+                    // Register input data with n8n (this makes the node show up with input)
+                    const inputQuery = (input as IDataObject)?.query;
+                    const inputPayload: IDataObject = {
+                        query: inputQuery !== undefined ? inputQuery : input as IDataObject,
+                    };
+                    const { index } = context.addInputData(connectionType, [
+                        [{ json: inputPayload }],
+                    ]);
+
+                    try {
+                        // Call the original _call method using type assertion
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const originalCall = (target as any)._call.bind(target);
+                        const response = await originalCall(input, runManager, config);
+
+                        // Parse response to create output items
+                        let outputData: IDataObject[];
+                        try {
+                            outputData = JSON.parse(response as string);
+                            if (!Array.isArray(outputData)) {
+                                outputData = [{ response: outputData }];
+                            }
+                        } catch {
+                            outputData = [{ response }];
+                        }
+
+                        // Register output data with n8n (this populates the Output panel)
+                        const outputItems: INodeExecutionData[] = outputData.map((item) => ({
+                            json: item,
+                            pairedItem: { item: itemIndex },
+                        }));
+
+                        context.addOutputData(connectionType, index, [outputItems]);
+
+                        return response as string;
+                    } catch (error) {
+                        // Register error output with n8n
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        context.addOutputData(connectionType, index, [
+                            [{ json: { error: errorMessage }, pairedItem: { item: itemIndex } }],
+                        ]);
+                        throw error;
+                    }
+                };
+            }
+
+            // Return other properties as-is
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const value = (target as any)[prop];
+            if (typeof value === 'function') {
+                return value.bind(target);
+            }
+            return value;
+        },
+    }) as T;
 }
 
 /**
