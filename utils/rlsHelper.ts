@@ -6,7 +6,6 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import type { PoolClient, Client } from 'pg';
-import type { StructuredTool } from '@langchain/core/tools';
 
 export interface RLSExecutionContext {
     role?: string;
@@ -64,100 +63,83 @@ export function createLogDebug(logger: Logger, debug: boolean) {
     };
 }
 
+export interface ToolFuncWrapperContext {
+    context: ISupplyDataFunctions;
+    itemIndex: number;
+    logger: Logger;
+}
+
 /**
- * Wraps a LangChain tool to log input/output data to n8n UI.
- * This is similar to n8n's internal logWrapper but simplified for our use case.
- * The wrapper intercepts the _call method to register input/output with n8n.
+ * Creates a wrapped function for DynamicStructuredTool that handles n8n input/output registration.
+ * This approach wraps the func BEFORE creating the tool, ensuring proper interception.
  */
-export function wrapToolForN8nOutput<T extends StructuredTool>(
-    tool: T,
-    context: ISupplyDataFunctions,
-    itemIndex: number,
-    logger: Logger,
-): T {
-    logger.info('[Wrapper] Creating proxy for tool');
+export function createWrappedToolFunc<TInput extends { query: string }>(
+    originalFunc: (input: TInput) => Promise<string>,
+    wrapperContext: ToolFuncWrapperContext,
+): (input: TInput) => Promise<string> {
+    const { context, itemIndex, logger } = wrapperContext;
 
-    return new Proxy(tool, {
-        get: (target, prop) => {
-            if (prop === '_call' && '_call' in target) {
-                logger.info('[Wrapper] _call property accessed, returning interceptor');
+    return async (input: TInput): Promise<string> => {
+        logger.info('[ToolFunc] Wrapped func called', { query: input.query });
 
-                return async (input: unknown, runManager?: unknown, config?: unknown): Promise<string> => {
-                    logger.info('[Wrapper] _call interceptor INVOKED', { input });
+        const connectionType = NodeConnectionTypes.AiTool;
 
-                    const connectionType = NodeConnectionTypes.AiTool;
+        const inputPayload: IDataObject = { query: input.query };
 
-                    const inputQuery = (input as IDataObject)?.query;
-                    const inputPayload: IDataObject = {
-                        query: inputQuery !== undefined ? inputQuery : input as IDataObject,
-                    };
+        logger.info('[ToolFunc] Registering input with n8n');
+        const { index } = context.addInputData(connectionType, [
+            [{ json: inputPayload }],
+        ]);
+        logger.info('[ToolFunc] Input registered', { index });
 
-                    logger.info('[Wrapper] Registering input with n8n', { inputPayload });
-                    const { index } = context.addInputData(connectionType, [
-                        [{ json: inputPayload }],
-                    ]);
-                    logger.info('[Wrapper] Input registered', { index });
+        try {
+            logger.info('[ToolFunc] Calling original func');
+            const response = await originalFunc(input);
+            logger.info('[ToolFunc] Original func returned', { responseLength: response?.length });
 
-                    try {
-                        logger.info('[Wrapper] Calling original _call method');
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const originalCall = (target as any)._call.bind(target);
-                        const response = await originalCall(input, runManager, config);
-                        logger.info('[Wrapper] Original _call returned', { responseLength: (response as string)?.length });
-
-                        let outputData: IDataObject[];
-                        try {
-                            outputData = JSON.parse(response as string);
-                            if (!Array.isArray(outputData)) {
-                                outputData = [{ response: outputData }];
-                            }
-                        } catch {
-                            outputData = [{ response }];
-                        }
-
-                        const outputItems: INodeExecutionData[] = outputData.map((item) => ({
-                            json: item,
-                            pairedItem: { item: itemIndex },
-                        }));
-
-                        logger.info('[Wrapper] Registering output with n8n', { outputCount: outputItems.length });
-                        context.addOutputData(connectionType, index, [outputItems]);
-                        logger.info('[Wrapper] Output registered successfully');
-
-                        return response as string;
-                    } catch (error) {
-                        const errorMessage = error instanceof Error ? error.message : String(error);
-                        logger.info('[Wrapper] Error caught in interceptor', { errorMessage });
-
-                        context.addOutputData(connectionType, index, [
-                            [{ json: { error: errorMessage }, pairedItem: { item: itemIndex } }],
-                        ]);
-
-                        const isCritical = isCriticalError(error);
-                        logger.info('[Wrapper] Error classification', { isCritical, errorMessage });
-
-                        if (isCritical) {
-                            logger.info('[Wrapper] Throwing NodeOperationError for critical error');
-                            throw new NodeOperationError(
-                                context.getNode(),
-                                errorMessage,
-                                { itemIndex },
-                            );
-                        }
-
-                        throw error;
-                    }
-                };
+            let outputData: IDataObject[];
+            try {
+                outputData = JSON.parse(response);
+                if (!Array.isArray(outputData)) {
+                    outputData = [{ response: outputData }];
+                }
+            } catch {
+                outputData = [{ response }];
             }
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const value = (target as any)[prop];
-            if (typeof value === 'function') {
-                return value.bind(target);
+            const outputItems: INodeExecutionData[] = outputData.map((item) => ({
+                json: item,
+                pairedItem: { item: itemIndex },
+            }));
+
+            logger.info('[ToolFunc] Registering output with n8n', { outputCount: outputItems.length });
+            context.addOutputData(connectionType, index, [outputItems]);
+            logger.info('[ToolFunc] Output registered successfully');
+
+            return response;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            logger.info('[ToolFunc] Error caught', { errorMessage });
+
+            context.addOutputData(connectionType, index, [
+                [{ json: { error: errorMessage }, pairedItem: { item: itemIndex } }],
+            ]);
+
+            const isCritical = isCriticalError(error);
+            logger.info('[ToolFunc] Error classification', { isCritical, errorMessage });
+
+            if (isCritical) {
+                logger.info('[ToolFunc] Throwing NodeOperationError for critical error');
+                throw new NodeOperationError(
+                    context.getNode(),
+                    errorMessage,
+                    { itemIndex },
+                );
             }
-            return value;
-        },
-    }) as T;
+
+            throw error;
+        }
+    };
 }
 
 /**

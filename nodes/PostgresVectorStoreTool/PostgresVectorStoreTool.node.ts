@@ -13,7 +13,7 @@ import {
     executeWithRole,
     quoteIdentifier,
     createLogDebug,
-    wrapToolForN8nOutput,
+    createWrappedToolFunc,
 } from '../../utils/rlsHelper';
 
 interface PostgresCredentials {
@@ -310,169 +310,153 @@ export class PostgresVectorStoreTool implements INodeType {
 
         logDebug('Embedding model validated successfully');
 
-        logDebug('Creating DynamicStructuredTool...');
+        const context = this;
+
+        const originalFunc = async ({ query }: { query: string }): Promise<string> => {
+            logDebug('func called with query', { query });
+            const client = new PgClient({
+                host: credentials.host,
+                database: credentials.database,
+                user: credentials.user,
+                password: credentials.password,
+                port: credentials.port,
+                ssl: PostgresVectorStoreTool.getSslConfig(credentials.ssl),
+            });
+
+            try {
+                logDebug('Connecting to database');
+                await client.connect();
+                logDebug('Connected to database');
+
+                if (!query) {
+                    throw new Error('Search query is missing. Please provide a query to search for.');
+                }
+
+                logDebug('Embedding query');
+                const queryVector = await embeddingModel.embedQuery(query);
+                logDebug('Query embedded successfully');
+
+                if (!Array.isArray(queryVector)) {
+                    throw new Error('Embedding model did not return a valid vector array');
+                }
+
+                const vectorString = `[${queryVector.join(',')}]`;
+
+                let results: any[];
+
+                if (operation === 'customQuery') {
+                    const sqlQuery = context.getNodeParameter('sqlQuery', itemIndex) as string;
+                    const role = undefined;
+
+                    logDebug('Executing custom query', { sqlQuery });
+                    results = await executeCustomQuery(client, sqlQuery, role);
+                    logDebug('Custom query executed', { resultCount: results.length });
+                } else {
+                    const tableName = context.getNodeParameter('tableName', itemIndex) as string;
+                    const includeMetadata = context.getNodeParameter('includeMetadata', itemIndex) as boolean;
+                    const topK = context.getNodeParameter('topK', itemIndex) as number;
+
+                    const columnNames = context.getNodeParameter('options.columnNames', itemIndex, {
+                        names: {
+                            id: 'id',
+                            vector: 'embedding',
+                            content: 'text',
+                            metadata: 'metadata',
+                        },
+                    }) as {
+                        names: {
+                            id: string;
+                            vector: string;
+                            content: string;
+                            metadata: string;
+                        };
+                    };
+
+                    const columnConfig = columnNames.names || {
+                        id: 'id',
+                        vector: 'embedding',
+                        content: 'text',
+                        metadata: 'metadata',
+                    };
+
+                    const quotedTable = quoteIdentifier(tableName);
+                    const quotedId = quoteIdentifier(columnConfig.id || 'id');
+                    const quotedVector = quoteIdentifier(columnConfig.vector || 'embedding');
+                    const quotedContent = quoteIdentifier(columnConfig.content || 'text');
+                    const quotedMetadata = quoteIdentifier(columnConfig.metadata || 'metadata');
+
+                    const metadataSelect = includeMetadata ? `, ${quotedMetadata} AS metadata` : '';
+
+                    const sql = `SELECT ${quotedId} AS id, ${quotedContent} AS content${metadataSelect}
+FROM ${quotedTable}
+ORDER BY ${quotedVector} <=> $1
+LIMIT $2`;
+
+                    const role =
+                        operation === 'retrieveRls'
+                            ? PostgresVectorStoreTool.ensureValidRole(context.getNodeParameter('rlsRole', itemIndex) as string)
+                            : undefined;
+
+                    const vectorPreview = vectorString.substring(0, 50) + '...';
+                    logger.info(`Executing Vector Search Query. SQL: ${sql} -- Role: ${role || 'None'} -- TopK: ${topK} -- Vector: ${vectorPreview}`);
+
+                    logDebug(`Executing query: ${sql}`, { role, topK });
+
+                    results = await executeWithRole(
+                        { client, role },
+                        async (queryClient) => {
+                            const result = await queryClient.query(sql, [vectorString, topK]);
+                            return result.rows;
+                        },
+                    );
+                    logDebug(`Query executed successfully. Got ${results.length} rows.`);
+                }
+
+                const resultPreview = results.length > 0 ? JSON.stringify(results[0]).substring(0, 200) + '...' : 'No results';
+                logDebug(`Vector search completed. Found ${results.length} results. Preview: ${resultPreview}`);
+
+                return JSON.stringify(results, null, 2);
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                const errorStack = error instanceof Error ? error.stack : undefined;
+                const errorDetails = {
+                    message: errorMessage,
+                    stack: errorStack,
+                    errorType: error?.constructor?.name,
+                    fullError: error
+                };
+
+                logger.error('Error during execution', errorDetails);
+                logDebug('Error during execution', errorDetails);
+                throw new Error(`Vector search failed: ${errorMessage}`);
+            } finally {
+                logDebug('Closing database connection');
+                await client.end();
+                logDebug('Database connection closed');
+            }
+        };
+
+        const wrappedFunc = createWrappedToolFunc(originalFunc, {
+            context: this,
+            itemIndex,
+            logger,
+        });
+
+        logDebug('Creating DynamicStructuredTool with wrapped func...');
         const tool = new DynamicStructuredTool({
             name: 'postgres_vector_search',
             description: description || 'Search for similar documents in the vector database',
             schema: z.object({
                 query: z.string().describe('The search query to find similar documents'),
             }),
-            func: async ({ query }: { query: string }) => {
-                logDebug('func called with query', { query });
-                // Create database client for this execution only
-                // Using Client instead of Pool to ensure we have a single dedicated connection
-                // that is definitely closed after execution.
-                const client = new PgClient({
-                    host: credentials.host,
-                    database: credentials.database,
-                    user: credentials.user,
-                    password: credentials.password,
-                    port: credentials.port,
-                    ssl: PostgresVectorStoreTool.getSslConfig(credentials.ssl),
-                });
-
-                try {
-                    logDebug('Connecting to database');
-                    await client.connect();
-                    logDebug('Connected to database');
-
-                    if (!query) {
-                        throw new Error('Search query is missing. Please provide a query to search for.');
-                    }
-
-                    // Convert query to embedding vector
-                    logDebug('Embedding query');
-                    const queryVector = await embeddingModel.embedQuery(query);
-                    logDebug('Query embedded successfully');
-
-                    if (!Array.isArray(queryVector)) {
-                        throw new Error('Embedding model did not return a valid vector array');
-                    }
-
-                    // Format vector for pgvector (string "[1,2,3]")
-                    // pg driver converts arrays to postgres array syntax "{1,2,3}" which pgvector doesn't like
-                    const vectorString = `[${queryVector.join(',')}]`;
-
-                    let results: any[];
-
-                    if (operation === 'customQuery') {
-                        // Custom SQL mode - use $1 placeholder for vector
-                        const sqlQuery = this.getNodeParameter('sqlQuery', itemIndex) as string;
-
-                        const role = undefined; // Custom SQL doesn't use RLS by default
-
-                        // executeCustomQuery now takes client
-                        logDebug('Executing custom query', { sqlQuery });
-                        // Note: executeCustomQuery might need update if it uses the vector, 
-                        // but currently it seems it doesn't take the vector as arg here?
-                        // Wait, executeCustomQuery implementation in rlsHelper probably doesn't handle the vector injection?
-                        // Let's check rlsHelper usage. 
-                        // Actually, customQuery implementation in this file (lines 336) calls executeCustomQuery(client, sqlQuery, role)
-                        // It doesn't seem to pass the vector! This is a separate issue for customQuery mode.
-                        // But the user is likely using 'retrieve' or 'retrieveRls' mode based on the logs showing "Executing query" (line 422).
-
-                        results = await executeCustomQuery(client, sqlQuery, role);
-                        logDebug('Custom query executed', { resultCount: results.length });
-                    } else {
-                        // Regular or RLS retrieve mode
-                        const tableName = this.getNodeParameter('tableName', itemIndex) as string;
-                        const includeMetadata = this.getNodeParameter('includeMetadata', itemIndex) as boolean;
-                        const topK = this.getNodeParameter('topK', itemIndex) as number;
-
-                        const columnNames = this.getNodeParameter('options.columnNames', itemIndex, {
-                            names: {
-                                id: 'id',
-                                vector: 'embedding',
-                                content: 'text',
-                                metadata: 'metadata',
-                            },
-                        }) as {
-                            names: {
-                                id: string;
-                                vector: string;
-                                content: string;
-                                metadata: string;
-                            };
-                        };
-
-                        const columnConfig = columnNames.names || {
-                            id: 'id',
-                            vector: 'embedding',
-                            content: 'text',
-                            metadata: 'metadata',
-                        };
-
-                        const quotedTable = quoteIdentifier(tableName);
-                        const quotedId = quoteIdentifier(columnConfig.id || 'id');
-                        const quotedVector = quoteIdentifier(columnConfig.vector || 'embedding');
-                        const quotedContent = quoteIdentifier(columnConfig.content || 'text');
-                        const quotedMetadata = quoteIdentifier(columnConfig.metadata || 'metadata');
-
-                        const metadataSelect = includeMetadata ? `, ${quotedMetadata} AS metadata` : '';
-
-                        const sql = `SELECT ${quotedId} AS id, ${quotedContent} AS content${metadataSelect}
-FROM ${quotedTable}
-ORDER BY ${quotedVector} <=> $1
-LIMIT $2`;
-
-                        const role =
-                            operation === 'retrieveRls'
-                                ? PostgresVectorStoreTool.ensureValidRole(this.getNodeParameter('rlsRole', itemIndex) as string)
-                                : undefined;
-
-                        // Log the actual query for debugging quality issues - EMBEDDED IN MESSAGE
-                        const vectorPreview = vectorString.substring(0, 50) + '...';
-                        logger.info(`Executing Vector Search Query. SQL: ${sql} -- Role: ${role || 'None'} -- TopK: ${topK} -- Vector: ${vectorPreview}`);
-
-                        logDebug(`Executing query: ${sql}`, { role, topK });
-
-                        results = await executeWithRole(
-                            { client, role },
-                            async (queryClient) => {
-                                const result = await queryClient.query(sql, [vectorString, topK]);
-                                return result.rows;
-                            },
-                        );
-                        logDebug(`Query executed successfully. Got ${results.length} rows.`);
-                    }
-
-                    // Return results as JSON string for the AI agent
-                    const resultPreview = results.length > 0 ? JSON.stringify(results[0]).substring(0, 200) + '...' : 'No results';
-                    logDebug(`Vector search completed. Found ${results.length} results. Preview: ${resultPreview}`);
-
-                    // Output data is now handled by wrapToolForN8nOutput wrapper
-                    // which intercepts _call and registers input/output with n8n UI
-                    return JSON.stringify(results, null, 2);
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    const errorStack = error instanceof Error ? error.stack : undefined;
-                    const errorDetails = {
-                        message: errorMessage,
-                        stack: errorStack,
-                        errorType: error?.constructor?.name,
-                        fullError: error
-                    };
-
-                    logger.error('Error during execution', errorDetails);
-                    logDebug('Error during execution', errorDetails);
-                    throw new Error(`Vector search failed: ${errorMessage}`);
-                } finally {
-                    // Always close the client connection
-                    logDebug('Closing database connection');
-                    await client.end();
-                    logDebug('Database connection closed');
-                }
-            },
+            func: wrappedFunc,
         });
 
         logDebug('Tool created successfully');
 
-        // Wrap tool with n8n output logger to display results in UI Output panel
-        const wrappedTool = wrapToolForN8nOutput(tool, this, itemIndex, logger);
-
         logDebug('Returning supply data...');
         return {
-            response: wrappedTool,
+            response: tool,
         };
     }
 }
