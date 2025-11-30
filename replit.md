@@ -1,91 +1,83 @@
-# n8n Postgres Vector Store Tool
+# Overview
 
-**Project Type:** n8n Community Node Package (TypeScript Library)  
-**Last Updated:** November 30, 2025
+This is an n8n community node package that provides an AI agent tool for PostgreSQL vector stores with pgvector support. The node enables AI agents to perform similarity searches with optional Row-Level Security (RLS) role switching and execute custom SQL queries. It integrates with n8n's AI workflow system, connecting to embedding nodes for vector similarity search operations.
 
-## Overview
+The project is built as a TypeScript-based n8n node package that can be published to npm and installed in n8n instances. It provides a specialized tool for AI agents working with vector databases, particularly useful for retrieval-augmented generation (RAG) workflows.
 
-This is an **n8n community node package** that provides AI agent tools for PostgreSQL/pgvector integration. It's not a web application - it's a TypeScript library that gets compiled and published to npm for use within n8n workflows.
+# User Preferences
 
-The package enables AI agents to perform:
-- Vector similarity search with PostgreSQL and pgvector
-- RLS (Row-Level Security) aware retrieval
-- Custom SQL query execution with embedding support
+Preferred communication style: Simple, everyday language.
 
-## Project Structure
+# System Architecture
 
-```
-├── nodes/PostgresVectorStoreTool/    # Main n8n node implementation
-│   ├── PostgresVectorStoreTool.node.ts
-│   └── postgresVectorStoreTool.svg
-├── utils/                            # Helper utilities for RLS and SQL
-│   └── rlsHelper.ts
-├── scripts/                          # Database setup scripts
-│   ├── setup-postgres.sh
-│   └── setup-postgres.sql
-├── dist/                             # Compiled output (generated)
-├── package.json                      # npm package configuration
-├── tsconfig.json                     # TypeScript configuration
-└── gulpfile.js                       # Build tasks (icons)
-```
+## Package Structure
 
-## Development Setup
+**Build System**: The project uses TypeScript for compilation with a Gulp-based build pipeline. The `gulpfile.js` handles copying icon assets from the source `nodes/` directory to the compiled `dist/` output. TypeScript compiles source files according to `tsconfig.json` settings targeting ES2019 with CommonJS modules.
 
-### Technologies
-- **Language:** TypeScript
-- **Runtime:** Node.js v20.19.3
-- **Package Manager:** npm v10.8.2
-- **Build System:** TypeScript compiler + Gulp (for icon copying)
+**Module Organization**: Source code is organized into three main directories:
+- `nodes/PostgresVectorStoreTool/` - Contains the main node implementation and SVG icon
+- `utils/` - Houses reusable helper functions for RLS and SQL operations  
+- `scripts/` - Database setup scripts for PostgreSQL configuration
 
-### Build Commands
-- `npm install` - Install dependencies
-- `npm run build` - Compile TypeScript and copy icons to dist/
-- `npm run dev` - Run TypeScript in watch mode (auto-recompile on changes)
-- `npm run lint` - Lint TypeScript files
-- `npm run format` - Format code with Prettier
+**Distribution**: Only the compiled `dist/` directory is included in the npm package. The `package.json` specifies the n8n nodes API version and points to the compiled node file.
 
-### Current State
+## Node Architecture
 
-The project is successfully configured and building:
-- ✅ All dependencies installed
-- ✅ TypeScript compiles without errors
-- ✅ Development workflow running in watch mode
-- ✅ Build output in `dist/` folder
+**Connection Model**: The node uses n8n's connection system with two inputs:
+- `AiTool` connection for integration with AI agent workflows
+- `AiEmbedding` connection to receive vector embeddings for similarity search
 
-### Workflow Configuration
+**Execution Modes**: Three distinct operational modes are supported:
+1. **Regular Retrieval** - Standard similarity search without RLS
+2. **RLS Retrieval** - Similarity search with automatic role switching for row-level security
+3. **Custom SQL** - Arbitrary SQL execution with expression support
 
-**Build & Watch** workflow is configured to run `npm run dev` which starts TypeScript in watch mode. This automatically recompiles the project when files change during development.
+**Credentials**: Uses standard PostgreSQL credentials (no custom credential type required). Credentials include host, database, user, password, port, and optional SSL configuration.
 
-## How This Package Works
+## Database Integration
 
-This is a **library package**, not a standalone application. It:
-1. Exports an n8n node class (`PostgresVectorStoreTool`)
-2. Gets installed into an n8n instance as a community node
-3. Provides a tool interface for AI agents within n8n workflows
+**Connection Pooling**: Uses the `pg` (node-postgres) library with connection pooling via `PgPool`. SSL configuration is flexible, supporting disabled SSL or permissive SSL modes.
 
-When published to npm, users install it via:
-```bash
-npm install n8n-nodes-postgres-vector-store-tool
-```
+**RLS Implementation**: The `executeWithRole` helper function wraps database operations in transactions, using `SET LOCAL ROLE` to temporarily assume a specified PostgreSQL role for the duration of the transaction. Role names are validated against regex patterns to prevent SQL injection.
 
-Then link it to their n8n installation to use the node in their workflows.
+**Query Execution**: The `executeCustomQuery` helper supports:
+- Direct SQL execution with full n8n expression interpolation
+- Vector placeholder handling for embedding integration
+- Schema-qualified identifier validation
+- Metadata inclusion/exclusion based on configuration
 
-## Key Features
+**Identifier Security**: The `quoteIdentifier` function validates table/column names to prevent SQL injection, supporting both simple identifiers and schema-qualified names (e.g., `schema.table`).
 
-- **Regular Retrieval:** Standard vector similarity search
-- **RLS Retrieval:** Vector search with Row-Level Security role switching
-- **Custom SQL:** Execute arbitrary SQL with embedding parameter support
-- **AI Agent Integration:** Dedicated description field and tool interface for AI agents
+## TypeScript Configuration
 
-## Dependencies
+**Compiler Options**: Targets ES2019 with strict type checking disabled for compatibility with n8n's workflow types. Includes declaration file generation for TypeScript consumers.
 
-- `pg` - PostgreSQL client for Node.js
-- `n8n-workflow` - n8n workflow types and utilities (peer dependency)
-- TypeScript, ESLint, Prettier for development
+**Module Resolution**: Uses Node module resolution with synthetic default imports and ESM interop enabled. Unused locals/parameters and implicit returns trigger warnings to maintain code quality.
 
-## Notes
+# External Dependencies
 
-- This is a library package without a web server or frontend
-- The "running" state means TypeScript watch mode is active
-- Changes to `.ts` files automatically trigger recompilation
-- The compiled output in `dist/` is what gets published to npm
+## Core Dependencies
+
+**pg (^8.11.0)**: PostgreSQL client library for Node.js. Handles all database connectivity, connection pooling, query execution, and transaction management. This is the only runtime dependency.
+
+## Development Dependencies
+
+**n8n-workflow (peer dependency)**: Provides TypeScript types and interfaces for n8n node development. Required for `IExecuteFunctions`, `INodeType`, `INodeTypeDescription`, and connection type definitions.
+
+**TypeScript (^5.2.2)**: Compiler for TypeScript source code. Project uses ES2019 target with CommonJS module output.
+
+**Gulp (^4.0.2)**: Task runner for build automation, specifically copying icon assets to the distribution folder.
+
+**ESLint (^8.42.0)**: Code linting with n8n-specific rules via `eslint-plugin-n8n-nodes-base` to ensure compliance with n8n node development standards.
+
+**Prettier (^2.7.1)**: Code formatter configured with semicolons, trailing commas, single quotes, 100-character print width, and tabs for indentation.
+
+## Database Requirements
+
+**PostgreSQL with pgvector**: The node requires a PostgreSQL database with the pgvector extension installed for vector similarity operations. Setup scripts are provided in the `scripts/` directory to configure the database, create necessary tables, and enable the extension.
+
+## Integration Points
+
+**n8n Platform**: Deployed as a community node package within n8n instances. Integrates with the AI agent system and embedding nodes through n8n's connection framework.
+
+**Embedding Services**: Accepts vector embeddings from any n8n embedding node (OpenAI, Cohere, HuggingFace, etc.) for similarity search operations.
