@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.5.45
+- **Feature**: Critical database errors now throw `NodeOperationError` and stop workflow (table/column not found, permission denied, connection errors, etc.)
+- **Feature**: Added `isCriticalError()` helper to classify errors
+- **Debug**: Added detailed logging to `wrapToolForN8nOutput` wrapper with `[Wrapper]` prefix
+
 ## 0.5.44
 - **Bugfix**: Fixed path to `package.json` (was `../../`, now `../../../` to account for dist folder structure)
 
