@@ -26,7 +26,7 @@ interface PostgresCredentials {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const packageJson = require('../../package.json');
+const packageJson = require('../../../package.json');
 
 export class PostgresVectorStoreTool implements INodeType {
     /**

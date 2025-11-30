@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.5.44
+- **Bugfix**: Fixed path to `package.json` (was `../../`, now `../../../` to account for dist folder structure)
+
 ## 0.5.43
 - **Refactoring**: `NODE_VERSION` now reads from `package.json` instead of hardcoded constant
 - **Refactoring**: `NODE_VERSION` moved inside class as static readonly property
