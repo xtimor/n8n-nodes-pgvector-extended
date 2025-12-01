@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.6.3
+- **Reverted**: Removed Query field and execute() method (n8n limitation - partial execution not supported for custom AI Tools with DynamicStructuredTool)
+
 ## 0.6.2
 - **Feature**: Added Query parameter and execute() method for manual execution (Execute Step button)
 
