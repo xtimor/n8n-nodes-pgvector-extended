@@ -1,4 +1,6 @@
 import type {
+        IExecuteFunctions,
+        INodeExecutionData,
         INodeType,
         INodeTypeDescription,
         ISupplyDataFunctions,
@@ -230,6 +232,15 @@ export class PostgresVectorStoreTool implements INodeType {
                                         },
                                 ],
                         },
+                        // Query parameter for manual execution (Execute Step button)
+                        {
+                                displayName: 'Query',
+                                name: 'query',
+                                type: 'string',
+                                default: '',
+                                placeholder: 'Enter search query for manual test',
+                                description: 'Search query for manual execution (used when clicking Execute Step)',
+                        },
                 ],
         };
 
@@ -376,5 +387,96 @@ export class PostgresVectorStoreTool implements INodeType {
 
                 logger.debug('Tool ready');
                 return { response: tool };
+        }
+
+        async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+                const items = this.getInputData();
+                const result: INodeExecutionData[] = [];
+
+                for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+                        const credentials = (await this.getCredentials('postgres')) as PostgresCredentials;
+                        const operation = this.getNodeParameter('operation', itemIndex) as string;
+                        const query = this.getNodeParameter('query', itemIndex, '') as string;
+
+                        const options =
+                                operation === 'customQuery'
+                                        ? (this.getNodeParameter('customOptions', itemIndex, {}) as { debug?: boolean })
+                                        : (this.getNodeParameter('options', itemIndex, {}) as { debug?: boolean });
+                        const debug = options.debug || false;
+
+                        const logger = new MyLogger(this.logger, debug);
+                        logger.debug(`Manual execution v${PostgresVectorStoreTool.NODE_VERSION}`);
+
+                        if (!query?.trim()) {
+                                throw new Error('Query is required for manual execution. Enter a search query in the Query field.');
+                        }
+
+                        const embeddingData = (await this.getInputConnectionData(
+                                NodeConnectionTypes.AiEmbedding,
+                                itemIndex,
+                        )) as any;
+
+                        const embeddingModel = Array.isArray(embeddingData) ? embeddingData[0] : embeddingData;
+
+                        if (!embeddingModel || typeof embeddingModel.embedQuery !== 'function') {
+                                throw new Error('Embedding model required. Connect an embedding node to the input.');
+                        }
+
+                        const client = new PgClient({
+                                host: credentials.host,
+                                database: credentials.database,
+                                user: credentials.user,
+                                password: credentials.password,
+                                port: credentials.port,
+                                ssl: PostgresVectorStoreTool.getSslConfig(credentials.ssl),
+                        });
+
+                        try {
+                                await client.connect();
+
+                                const vector = await embeddingModel.embedQuery(query);
+                                if (!Array.isArray(vector)) {
+                                        throw new Error('Embedding model returned invalid vector');
+                                }
+
+                                const vectorStr = `[${vector.join(',')}]`;
+                                let results: any[];
+
+                                if (operation === 'customQuery') {
+                                        const sql = this.getNodeParameter('sqlQuery', itemIndex) as string;
+                                        const queryResult = await client.query(sql, [vectorStr]);
+                                        results = queryResult.rows;
+                                } else {
+                                        const tableName = this.getNodeParameter('tableName', itemIndex) as string;
+                                        const topK = this.getNodeParameter('topK', itemIndex) as number;
+                                        const includeMetadata = this.getNodeParameter('includeMetadata', itemIndex) as boolean;
+
+                                        const columnNames = this.getNodeParameter('options.columnNames', itemIndex, {
+                                                names: PostgresVectorStoreTool.DEFAULT_COLUMNS,
+                                        }) as { names: ColumnConfig };
+                                        const cols = columnNames.names || PostgresVectorStoreTool.DEFAULT_COLUMNS;
+
+                                        const metadataCol = includeMetadata ? `, ${quoteIdentifier(cols.metadata)} AS metadata` : '';
+                                        const sql = `
+                                                SELECT ${quoteIdentifier(cols.content)} AS text${metadataCol}
+                                                FROM ${quoteIdentifier(tableName)}
+                                                ORDER BY ${quoteIdentifier(cols.vector)} <=> $1
+                                                LIMIT $2
+                                        `;
+
+                                        const queryResult = await client.query(sql, [vectorStr, topK]);
+                                        results = queryResult.rows;
+                                }
+
+                                result.push({
+                                        json: { response: JSON.stringify(results, null, 2) },
+                                        pairedItem: { item: itemIndex },
+                                });
+                        } finally {
+                                await client.end();
+                        }
+                }
+
+                return [result];
         }
 }

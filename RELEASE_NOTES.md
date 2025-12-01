@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.6.2
+- **Feature**: Added Query parameter and execute() method for manual execution (Execute Step button)
+
 ## 0.6.1
 - **Output**: Removed id field from results
 - **Output**: Renamed content field to text
