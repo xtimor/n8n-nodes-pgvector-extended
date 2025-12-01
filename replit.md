@@ -10,70 +10,55 @@ Preferred communication style: Simple, everyday language.
 Git workflow: Work in branch `replit-code-generator`, user handles git push manually.
 Publishing: Never publish to npm without explicit user permission.
 
+# Project Structure
+
+```
+├── nodes/PostgresVectorStoreTool/
+│   ├── PostgresVectorStoreTool.node.ts   # Main node implementation
+│   └── postgresVectorStoreTool.svg       # Node icon
+├── utils/
+│   └── Helper.ts                         # MyLogger, SQL utilities, tool wrapper
+├── dist/                                 # Compiled output (npm package)
+├── package.json                          # Package config
+├── tsconfig.json                         # TypeScript config
+├── gulpfile.js                           # Build icons task
+├── README.md                             # User documentation
+├── RELEASE_NOTES.md                      # Version history
+└── PUBLISH_TO_NPM.md                     # Publishing guide
+```
+
 # System Architecture
 
-## Package Structure
+## Build System
 
-**Build System**: The project uses TypeScript for compilation with a Gulp-based build pipeline. The `gulpfile.js` handles copying icon assets from the source `nodes/` directory to the compiled `dist/` output. TypeScript compiles source files according to `tsconfig.json` settings targeting ES2019 with CommonJS modules.
-
-**Module Organization**: Source code is organized into two main directories:
-- `nodes/PostgresVectorStoreTool/` - Contains the main node implementation and SVG icon
-- `utils/` - Houses Helper.ts with MyLogger class, SQL utilities, and tool wrapper functions
-
-**Distribution**: Only the compiled `dist/` directory is included in the npm package. The `package.json` specifies the n8n nodes API version and points to the compiled node file.
+TypeScript compilation with Gulp-based build pipeline. The `gulpfile.js` handles copying icon assets from source `nodes/` directory to compiled `dist/` output.
 
 ## Node Architecture
 
-**Connection Model**: The node uses n8n's connection system:
-- Input: `AiEmbedding` connection to receive vector embeddings for similarity search
-- Output: `AiTool` connection for integration with AI agent workflows
+**Connection Model**:
+- Input: `AiEmbedding` connection to receive vector embeddings
+- Output: `AiTool` connection for AI agent integration
 
-**Execution Modes**: Two operational modes are supported:
-1. **Vector Search** - Standard similarity search with configurable table and columns
-2. **Custom SQL** - Arbitrary SQL execution with $1 placeholder for embedding vector
+**Execution Modes**:
+1. **Regular Retrieval** - Standard similarity search with configurable table and columns
+2. **Custom SQL** - Arbitrary SQL with $1 placeholder for embedding vector
 
-**Credentials**: Uses standard PostgreSQL credentials (no custom credential type required). Credentials include host, database, user, password, port, and optional SSL configuration.
+**Credentials**: Uses standard PostgreSQL credentials (host, database, user, password, port, SSL).
 
 ## Helper Utilities (utils/Helper.ts)
 
-**MyLogger**: Custom logger wrapper class with debug mode support. Logs debug messages only when debug mode is enabled, always logs info/error messages.
-
-**createWrappedToolFunc**: Wraps tool function to handle n8n input/output registration for UI display. Must wrap func BEFORE creating DynamicStructuredTool.
-
-**quoteIdentifier**: Validates and quotes SQL identifiers to prevent injection. Supports schema.table format.
-
-**isCriticalError**: Detects database errors that should stop workflow execution (connection errors, permission denied, table not found, etc.)
-
-## TypeScript Configuration
-
-**Compiler Options**: Targets ES2019 with strict type checking disabled for compatibility with n8n's workflow types. Includes declaration file generation for TypeScript consumers.
-
-**Module Resolution**: Uses Node module resolution with synthetic default imports and ESM interop enabled.
+- **MyLogger**: Logger wrapper with debug mode support
+- **createWrappedToolFunc**: Wraps tool function for n8n input/output registration
+- **quoteIdentifier**: Validates and quotes SQL identifiers
+- **isCriticalError**: Detects database errors that should stop workflow
 
 # External Dependencies
 
-## Core Dependencies
+**Runtime**: pg (PostgreSQL client)
+**Dev**: TypeScript, Gulp, ESLint, Prettier
+**Peer**: n8n-workflow
 
-**pg (^8.11.0)**: PostgreSQL client library for Node.js. Handles all database connectivity and query execution. This is the only runtime dependency.
+# Known Limitations
 
-## Development Dependencies
-
-**n8n-workflow (peer dependency)**: Provides TypeScript types and interfaces for n8n node development.
-
-**TypeScript (^5.2.2)**: Compiler for TypeScript source code.
-
-**Gulp (^4.0.2)**: Task runner for build automation, specifically copying icon assets.
-
-**ESLint (^8.42.0)**: Code linting with n8n-specific rules.
-
-**Prettier (^2.7.1)**: Code formatter.
-
-## Database Requirements
-
-**PostgreSQL with pgvector**: The node requires a PostgreSQL database with the pgvector extension installed for vector similarity operations.
-
-## Integration Points
-
-**n8n Platform**: Deployed as a community node package within n8n instances. Integrates with the AI agent system and embedding nodes through n8n's connection framework.
-
-**Embedding Services**: Accepts vector embeddings from any n8n embedding node (OpenAI, Cohere, HuggingFace, Google, etc.) for similarity search operations.
+- "Execute Step" button doesn't work for AI Tool nodes in n8n (platform limitation, not a bug)
+- Must test via full workflow with AI Agent
