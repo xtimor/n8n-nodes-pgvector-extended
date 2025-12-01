@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.6.4
+- **Docs**: Completely rewritten README - removed RLS mentions, highlighted Custom SQL as main feature
+- **Docs**: Added "Helps With" section with use cases
+- **Docs**: Added Debug Mode documentation
+
 ## 0.6.3
 - **Reverted**: Removed Query field and execute() method (n8n limitation - partial execution not supported for custom AI Tools with DynamicStructuredTool)
 

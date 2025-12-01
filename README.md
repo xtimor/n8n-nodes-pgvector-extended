@@ -1,44 +1,69 @@
 # Postgres Vector Store Tool (n8n)
 
-AI agent tool for Postgres/pgvector that supports RLS-aware retrieval and custom SQL execution while relying on standard Postgres credentials.
+AI agent tool for Postgres/pgvector with flexible vector search capabilities. Unlike the built-in Vector Store Tool, this node gives you full control over your queries through Custom SQL mode.
+
+## Why This Tool?
+
+The built-in n8n Vector Store Tool is limited to basic similarity search. This tool solves that by offering **Custom SQL mode** - write any query you need while still getting vector embeddings from connected embedding nodes.
+
+## Helps With
+
+- **Standard vector similarity search** - quick setup with configurable table/columns
+- **Complex search queries** - JOINs, filters, aggregations with vector operations
+- **Access control patterns** - implement row-level security, user-scoped searches
+- **Multi-table retrieval** - search across related tables in one query
+- **Custom ranking** - combine vector similarity with other scoring factors
+- **Hybrid search** - mix full-text search with vector similarity
 
 ## Features
 
-### 🎯 AI Agent Tooling
-- Dedicated Description field to explain usage to connected agents.
-- Requires an embedding node connection and uses provided embeddings for similarity search.
+### Custom SQL Mode (Recommended)
 
-### 📥 Regular Retrieval Mode
-- Default mode that performs similarity search without setting an RLS role.
-- Customizable table and column names.
-- Includes metadata in results by default.
-- Standard Postgres credentials are used—no custom credential type required.
+Write any SQL query with `$1` placeholder for the embedding vector:
 
-### 🔐 RLS Retrieval Mode
-- Automatically sets the provided RLS role using `SET LOCAL ROLE`.
-- Customizable table and column names.
-- Optional metadata inclusion in results.
-- Standard Postgres credentials are used—no custom credential type required.
+```sql
+SELECT content, metadata, 1 - (embedding <=> $1) AS similarity
+FROM documents
+WHERE user_id = 'user123'
+ORDER BY embedding <=> $1
+LIMIT 10
+```
 
-### 🛠️ Custom SQL Mode
-- Run arbitrary SQL with full n8n expression support.
-- Minimal configuration: only the SQL query field is shown.
+### Regular Retrieval Mode
+
+Quick setup for standard similarity search:
+- Configurable table and column names
+- Adjustable result limit (Top K)
+- Optional metadata inclusion
+
+### Debug Mode
+
+Enable in Options to get detailed logging for troubleshooting:
+- SQL queries being executed
+- Embedding vector dimensions
+- Query execution timing
+- Connection details
+- Error stack traces
+
+All debug output goes to n8n logs - essential for tracing issues in production.
 
 ## Installation
 
-### Via npm (when published)
+### Via npm
+
 ```bash
 npm install n8n-nodes-postgres-vector-store-tool
 ```
 
 ### Manual Installation
-1. Clone or download this repository.
-2. Build the node:
+
+1. Clone or download this repository
+2. Build:
    ```bash
    npm install
    npm run build
    ```
-3. Link to your n8n installation:
+3. Link to n8n:
    ```bash
    npm link
    cd ~/.n8n/custom
@@ -47,34 +72,48 @@ npm install n8n-nodes-postgres-vector-store-tool
 
 ## Usage
 
-### Connection and Credentials
-- Use standard **Postgres** credentials in n8n.
-- Connect an embedding node to the dedicated embedding input; the tool will use its output vector for similarity search.
+### Prerequisites
 
-### Modes
+- PostgreSQL with pgvector extension
+- Standard Postgres credentials in n8n
+- Embedding node connected (OpenAI, Cohere, etc.)
 
-#### 1) Regular Retrieving (Default)
-- Performs similarity search without setting an RLS role.
-- Set the **Table Name** and (optionally) override column names in **Options → Column Names**:
-  - **ID** (default: `id`)
-  - **Vector** (default: `embedding`)
-  - **Content** (default: `text`)
-  - **Metadata** (default: `metadata`)
-- Configure **Limit** for the number of rows returned.
-- Toggle **Include Metadata** to control whether metadata is returned (enabled by default).
+### Quick Start
 
-#### 2) Retrieving with RLS Role
-- Provide the **RLS Role** to be set before querying.
-- All Regular Retrieving options are available, but the query runs within the specified role context.
+1. Add the node to your AI Agent workflow
+2. Connect an embedding node to the input
+3. Configure Postgres credentials
+4. Choose your mode:
+   - **Regular Retrieval**: Set table name, adjust options
+   - **Custom SQL**: Write your query with `$1` for embeddings
 
-#### 3) Custom SQL Query
-- Only the **SQL Query** field is shown.
-- The tool executes the query directly without additional processing.
+### Column Configuration (Regular Mode)
 
-## Security Considerations
+Default column names (customizable in Options):
+- **Vector**: `embedding`
+- **Content**: `text`
+- **Metadata**: `metadata`
 
-- RLS roles and table/column names are validated to reduce injection risks. Ensure the specified role exists and has the correct permissions.
-- Custom SQL should only be executed in trusted contexts.
+### Output Format
+
+Results return in `text` field for direct AI agent consumption:
+
+```json
+[
+  {"text": "Document content here", "metadata": {...}},
+  {"text": "Another document", "metadata": {...}}
+]
+```
+
+## Testing
+
+This node works as an AI Agent tool. To test:
+1. Create a workflow with Chat Trigger → AI Agent
+2. Connect this node to the Agent's tools
+3. Connect an embedding node
+4. Chat with the agent and ask questions that trigger vector search
+
+Note: "Execute Step" button doesn't work for AI Tool nodes in n8n - this is a platform limitation, not a bug.
 
 ## License
 
