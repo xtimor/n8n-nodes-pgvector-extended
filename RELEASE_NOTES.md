@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.7.0 (Release Candidate)
+- **Breaking**: Removed RLS mode completely
+- **Docs**: Rewritten README - Custom SQL as main feature, added "Helps With" section, Debug Mode docs
+- **Cleanup**: Removed unused scripts, outdated documentation, temporary files
+- **Refactor**: Simplified codebase - only Regular Retrieval and Custom SQL modes
+
 ## 0.6.4
 - **Docs**: Completely rewritten README - removed RLS mentions, highlighted Custom SQL as main feature
 - **Docs**: Added "Helps With" section with use cases
