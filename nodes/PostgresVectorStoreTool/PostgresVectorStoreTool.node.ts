@@ -1,462 +1,380 @@
 import type {
-    INodeType,
-    INodeTypeDescription,
-    ISupplyDataFunctions,
-    SupplyData,
+        INodeType,
+        INodeTypeDescription,
+        ISupplyDataFunctions,
+        SupplyData,
 } from 'n8n-workflow';
 import { NodeConnectionTypes } from 'n8n-workflow';
 import { Client as PgClient } from 'pg';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import {
-    executeCustomQuery,
-    executeWithRole,
-    quoteIdentifier,
-    createLogDebug,
-    createWrappedToolFunc,
-} from '../../utils/rlsHelper';
+import { MyLogger, quoteIdentifier, createWrappedToolFunc } from '../../utils/Helper';
 
+// PostgreSQL credentials interface
 interface PostgresCredentials {
-    host: string;
-    database: string;
-    user: string;
-    password: string;
-    port: number;
-    ssl?: string | boolean;
+        host: string;
+        database: string;
+        user: string;
+        password: string;
+        port: number;
+        ssl?: string | boolean;
 }
 
+// Column configuration for vector table
+interface ColumnConfig {
+        id: string;
+        vector: string;
+        content: string;
+        metadata: string;
+}
+
+// Load package version at module level
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const packageJson = require('../../../package.json');
 
 export class PostgresVectorStoreTool implements INodeType {
-    /**
-     * Package version for logging
-     */
-    private static readonly NODE_VERSION: string = packageJson.version;
+        // Package version for logging
+        private static readonly NODE_VERSION: string = packageJson.version;
 
-    /**
-     * Get SSL configuration from credentials
-     */
-    private static getSslConfig(ssl?: string | boolean): boolean | { rejectUnauthorized: boolean } {
-        if (typeof ssl === 'string') {
-            return ssl === 'disable' ? false : { rejectUnauthorized: false };
+        // Default column names for vector table
+        private static readonly DEFAULT_COLUMNS: ColumnConfig = {
+                id: 'id',
+                vector: 'embedding',
+                content: 'text',
+                metadata: 'metadata',
+        };
+
+        /**
+         * Parse SSL configuration from credentials
+         */
+        private static getSslConfig(ssl?: string | boolean): boolean | { rejectUnauthorized: boolean } {
+                if (typeof ssl === 'string') {
+                        return ssl === 'disable' ? false : { rejectUnauthorized: false };
+                }
+                return ssl ?? false;
         }
-        return ssl ?? false;
-    }
 
-    /**
-     * Validate RLS role name to prevent SQL injection
-     */
-    private static ensureValidRole(role: string): string {
-        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(role)) {
-            throw new Error(
-                'RLS Role must contain only letters, numbers, and underscores, and cannot start with a number.',
-            );
-        }
-        return role;
-    }
-
-    description: INodeTypeDescription = {
-        displayName: 'Postgres Vector Store Tool',
-        name: 'postgresVectorStoreTool',
-        icon: 'file:postgresVectorStoreTool.svg',
-        group: ['transform'],
-        version: 3,
-        description: 'Vector store retrieval tool with RLS-aware search and custom SQL for AI agents',
-        defaults: {
-            name: 'Postgres Vector Store Tool',
-        },
-        inputs: [NodeConnectionTypes.AiEmbedding],
-        outputs: [NodeConnectionTypes.AiTool],
-        credentials: [
-            {
-                name: 'postgres',
-                required: true,
-            },
-        ],
-        properties: [
-            {
-                displayName: 'Description',
-                name: 'agentDescription',
-                type: 'string',
-                typeOptions: {
-                    rows: 3,
+        description: INodeTypeDescription = {
+                displayName: 'Postgres Vector Store Tool',
+                name: 'postgresVectorStoreTool',
+                icon: 'file:postgresVectorStoreTool.svg',
+                group: ['transform'],
+                version: 3,
+                description: 'Vector similarity search tool for AI agents with pgvector support',
+                defaults: {
+                        name: 'Postgres Vector Store Tool',
                 },
-                default: 'Search for similar documents in the vector database. Provide a search query to find relevant information.',
-                description: 'Describe how the connected AI agent should use this tool.',
-            },
-            {
-                displayName: 'Mode',
-                name: 'operation',
-                type: 'options',
-                noDataExpression: true,
-                options: [
-                    {
-                        name: 'Regular Retrieving',
-                        value: 'retrieve',
-                        description: 'Perform vector similarity search without RLS role switching',
-                        action: 'Retrieve documents',
-                    },
-                    {
-                        name: 'Retrieving with RLS Role',
-                        value: 'retrieveRls',
-                        description: 'Perform vector similarity search with an RLS role',
-                        action: 'Retrieve documents with RLS role',
-                    },
-                    {
-                        name: 'Custom SQL Query',
-                        value: 'customQuery',
-                        description: 'Run a custom SQL statement with vector from query',
-                        action: 'Execute custom SQL',
-                    },
-                ],
-                default: 'retrieve',
-            },
-            {
-                displayName: 'RLS Role',
-                name: 'rlsRole',
-                type: 'string',
-                required: true,
-                displayOptions: {
-                    show: {
-                        operation: ['retrieveRls'],
-                    },
-                },
-                default: '',
-                description: 'Role to set before running the vector search (uses SET LOCAL ROLE).',
-            },
-            {
-                displayName: 'Table Name',
-                name: 'tableName',
-                type: 'string',
-                displayOptions: {
-                    show: {
-                        operation: ['retrieve', 'retrieveRls'],
-                    },
-                },
-                default: 'n8n_vectors',
-                description: 'Name of the table where vectors are stored. Supports schema.table format.',
-            },
-            {
-                displayName: 'Limit',
-                name: 'topK',
-                type: 'number',
-                typeOptions: {
-                    minValue: 1,
-                    maxValue: 1000,
-                },
-                displayOptions: {
-                    show: {
-                        operation: ['retrieve', 'retrieveRls'],
-                    },
-                },
-                default: 4,
-                description: 'Maximum number of rows to return.',
-            },
-            {
-                displayName: 'Include Metadata',
-                name: 'includeMetadata',
-                type: 'boolean',
-                displayOptions: {
-                    show: {
-                        operation: ['retrieve', 'retrieveRls'],
-                    },
-                },
-                default: true,
-                description: 'Whether to include the metadata column in the response.',
-            },
-            {
-                displayName: 'Options',
-                name: 'options',
-                type: 'collection',
-                placeholder: 'Add Option',
-                default: {},
-                displayOptions: {
-                    show: {
-                        operation: ['retrieve', 'retrieveRls'],
-                    },
-                },
-                options: [
-                    {
-                        displayName: 'Debug Mode',
-                        name: 'debug',
-                        type: 'boolean',
-                        default: false,
-                        description: 'Whether to add debug information to the item.',
-                    },
-                    {
-                        displayName: 'Column Names',
-                        name: 'columnNames',
-                        type: 'fixedCollection',
-                        default: {
-                            names: {
-                                id: 'id',
-                                vector: 'embedding',
-                                content: 'text',
-                                metadata: 'metadata',
-                            },
+                inputs: [
+                        {
+                                displayName: 'Embedding',
+                                maxConnections: 1,
+                                type: NodeConnectionTypes.AiEmbedding,
+                                required: true,
                         },
-                        placeholder: 'Custom column names',
-                        options: [
-                            {
-                                displayName: 'Names',
-                                name: 'names',
-                                values: [
-                                    {
-                                        displayName: 'ID',
-                                        name: 'id',
-                                        type: 'string',
-                                        default: 'id',
-                                        description: 'Column used as identifier.',
-                                    },
-                                    {
-                                        displayName: 'Vector',
-                                        name: 'vector',
-                                        type: 'string',
-                                        default: 'embedding',
-                                        description: 'Column storing the embedding vector.',
-                                    },
-                                    {
-                                        displayName: 'Content',
-                                        name: 'content',
-                                        type: 'string',
-                                        default: 'text',
-                                        description: 'Column storing the document text.',
-                                    },
-                                    {
-                                        displayName: 'Metadata',
-                                        name: 'metadata',
-                                        type: 'string',
-                                        default: 'metadata',
-                                        description: 'Column storing document metadata.',
-                                    },
+                ],
+                outputs: [NodeConnectionTypes.AiTool],
+                outputNames: ['Tool'],
+                credentials: [
+                        {
+                                name: 'postgres',
+                                required: true,
+                        },
+                ],
+                properties: [
+                        // Tool description for AI agent
+                        {
+                                displayName: 'Description',
+                                name: 'agentDescription',
+                                type: 'string',
+                                typeOptions: { rows: 3 },
+                                default:
+                                        'Search for similar documents in the vector database. Provide a search query to find relevant information.',
+                                description: 'Describe how the AI agent should use this tool',
+                        },
+                        // Operation mode selector
+                        {
+                                displayName: 'Mode',
+                                name: 'operation',
+                                type: 'options',
+                                noDataExpression: true,
+                                options: [
+                                        {
+                                                name: 'Vector Search',
+                                                value: 'retrieve',
+                                                description: 'Perform vector similarity search',
+                                                action: 'Search similar documents',
+                                        },
+                                        {
+                                                name: 'Custom SQL',
+                                                value: 'customQuery',
+                                                description: 'Execute custom SQL with vector parameter',
+                                                action: 'Execute custom SQL',
+                                        },
                                 ],
-                            },
-                        ],
-                    },
+                                default: 'retrieve',
+                        },
+                        // Vector search settings
+                        {
+                                displayName: 'Table Name',
+                                name: 'tableName',
+                                type: 'string',
+                                displayOptions: { show: { operation: ['retrieve'] } },
+                                default: 'n8n_vectors',
+                                description: 'Table containing vectors (supports schema.table format)',
+                        },
+                        {
+                                displayName: 'Limit',
+                                name: 'topK',
+                                type: 'number',
+                                typeOptions: { minValue: 1, maxValue: 1000 },
+                                displayOptions: { show: { operation: ['retrieve'] } },
+                                default: 4,
+                                description: 'Maximum results to return',
+                        },
+                        {
+                                displayName: 'Include Metadata',
+                                name: 'includeMetadata',
+                                type: 'boolean',
+                                displayOptions: { show: { operation: ['retrieve'] } },
+                                default: true,
+                                description: 'Whether to include metadata column in results',
+                        },
+                        // Advanced options
+                        {
+                                displayName: 'Options',
+                                name: 'options',
+                                type: 'collection',
+                                placeholder: 'Add Option',
+                                default: {},
+                                displayOptions: { show: { operation: ['retrieve'] } },
+                                options: [
+                                        {
+                                                displayName: 'Debug Mode',
+                                                name: 'debug',
+                                                type: 'boolean',
+                                                default: false,
+                                                description: 'Whether to enable detailed logging for troubleshooting',
+                                        },
+                                        {
+                                                displayName: 'Column Names',
+                                                name: 'columnNames',
+                                                type: 'fixedCollection',
+                                                default: { names: { id: 'id', vector: 'embedding', content: 'text', metadata: 'metadata' } },
+                                                placeholder: 'Custom column names',
+                                                options: [
+                                                        {
+                                                                displayName: 'Names',
+                                                                name: 'names',
+                                                                values: [
+                                                                        {
+                                                                                displayName: 'ID',
+                                                                                name: 'id',
+                                                                                type: 'string',
+                                                                                default: 'id',
+                                                                                description: 'Primary key column',
+                                                                        },
+                                                                        {
+                                                                                displayName: 'Vector',
+                                                                                name: 'vector',
+                                                                                type: 'string',
+                                                                                default: 'embedding',
+                                                                                description: 'Vector embedding column',
+                                                                        },
+                                                                        {
+                                                                                displayName: 'Content',
+                                                                                name: 'content',
+                                                                                type: 'string',
+                                                                                default: 'text',
+                                                                                description: 'Document text column',
+                                                                        },
+                                                                        {
+                                                                                displayName: 'Metadata',
+                                                                                name: 'metadata',
+                                                                                type: 'string',
+                                                                                default: 'metadata',
+                                                                                description: 'JSON metadata column',
+                                                                        },
+                                                                ],
+                                                        },
+                                                ],
+                                        },
+                                ],
+                        },
+                        // Custom SQL query
+                        {
+                                displayName: 'SQL Query',
+                                name: 'sqlQuery',
+                                type: 'string',
+                                typeOptions: { rows: 5 },
+                                displayOptions: { show: { operation: ['customQuery'] } },
+                                default: 'SELECT * FROM n8n_vectors ORDER BY embedding <=> $1 LIMIT 10',
+                                description: 'SQL query with $1 placeholder for embedding vector',
+                                placeholder:
+                                        "SELECT * FROM vectors WHERE metadata->>'type' = 'doc' ORDER BY embedding <=> $1 LIMIT 5",
+                        },
+                        // Debug mode for custom SQL
+                        {
+                                displayName: 'Options',
+                                name: 'customOptions',
+                                type: 'collection',
+                                placeholder: 'Add Option',
+                                default: {},
+                                displayOptions: { show: { operation: ['customQuery'] } },
+                                options: [
+                                        {
+                                                displayName: 'Debug Mode',
+                                                name: 'debug',
+                                                type: 'boolean',
+                                                default: false,
+                                                description: 'Whether to enable detailed logging for troubleshooting',
+                                        },
+                                ],
+                        },
                 ],
-            },
-            {
-                displayName: 'SQL Query',
-                name: 'sqlQuery',
-                type: 'string',
-                typeOptions: {
-                    rows: 5,
-                },
-                displayOptions: {
-                    show: {
-                        operation: ['customQuery'],
-                    },
-                },
-                default: 'SELECT * FROM n8n_vectors ORDER BY embedding <-> $1 LIMIT 10',
-                description: 'Custom SQL query to execute. Use $1 as placeholder for the embedding vector.',
-                placeholder: 'SELECT * FROM my_vectors WHERE metadata->>\'owner\' = \'user\' ORDER BY embedding <-> $1 LIMIT 5',
-            },
-        ],
-    };
+        };
 
-    async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
-        const credentials = (await this.getCredentials('postgres')) as PostgresCredentials;
-        const operation = this.getNodeParameter('operation', itemIndex) as string;
-        const description = this.getNodeParameter('agentDescription', itemIndex) as string;
-        const options = this.getNodeParameter('options', itemIndex, {}) as { debug?: boolean };
-        const debug = options.debug || false;
+        async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
+                // Get credentials and parameters
+                const credentials = (await this.getCredentials('postgres')) as PostgresCredentials;
+                const operation = this.getNodeParameter('operation', itemIndex) as string;
+                const description = this.getNodeParameter('agentDescription', itemIndex) as string;
 
-        // Capture logger reference for use in the tool func
-        const logger = this.logger;
+                // Get debug mode from appropriate options
+                const options =
+                        operation === 'customQuery'
+                                ? (this.getNodeParameter('customOptions', itemIndex, {}) as { debug?: boolean })
+                                : (this.getNodeParameter('options', itemIndex, {}) as { debug?: boolean });
+                const debug = options.debug || false;
 
-        // Create debug logging function from helper
-        const logDebug = createLogDebug(logger, debug);
+                // Initialize logger
+                const logger = new MyLogger(this.logger, debug);
+                logger.debug(`Starting node v${PostgresVectorStoreTool.NODE_VERSION}`);
 
-        logDebug(`Begin... [v${PostgresVectorStoreTool.NODE_VERSION}]`);
+                // Get embedding model from connected node
+                logger.debug('Fetching embedding model');
+                const embeddingData = (await this.getInputConnectionData(
+                        NodeConnectionTypes.AiEmbedding,
+                        itemIndex,
+                )) as any;
 
-        logDebug('Getting embedding model from input connection...');
-        // Get embedding model from input connection
-        // Note: getInputConnectionData returns an array, we need the first element
-        const embeddingModelData = (await this.getInputConnectionData(
-            NodeConnectionTypes.AiEmbedding,
-            itemIndex,
-        )) as any;
+                // Extract model (may be wrapped in array)
+                const embeddingModel = Array.isArray(embeddingData) ? embeddingData[0] : embeddingData;
 
-        logDebug('Raw embedding data received', {
-            type: typeof embeddingModelData,
-            isArray: Array.isArray(embeddingModelData),
-            length: embeddingModelData?.length,
-            keys: embeddingModelData ? Object.keys(embeddingModelData) : [],
-        });
+                logger.debug('Embedding model received', {
+                        type: typeof embeddingModel,
+                        hasEmbedQuery: typeof embeddingModel?.embedQuery === 'function',
+                });
 
-        // Extract the actual embedding model from the array
-        const embeddingModel = Array.isArray(embeddingModelData) ? embeddingModelData[0] : embeddingModelData;
-
-        logDebug('Embedding model extracted', {
-            embeddingModel: embeddingModel,
-            type: typeof embeddingModel,
-            isNull: embeddingModel === null,
-            isUndefined: embeddingModel === undefined,
-            keys: embeddingModel ? Object.keys(embeddingModel) : [],
-            hasEmbedQuery: typeof embeddingModel?.embedQuery === 'function',
-            embeddingModelConstructor: embeddingModel?.constructor?.name
-        });
-
-        if (!embeddingModel || typeof embeddingModel.embedQuery !== 'function') {
-            const errorMsg = `Embedding model is required. Connect an embedding node to the input. Received: ${JSON.stringify({
-                type: typeof embeddingModel,
-                keys: embeddingModel ? Object.keys(embeddingModel) : [],
-                constructor: embeddingModel?.constructor?.name
-            })}`;
-            logger.error(errorMsg);
-            throw new Error(errorMsg);
-        }
-
-        logDebug('Embedding model validated successfully');
-
-        const context = this;
-
-        const originalFunc = async ({ query }: { query: string }): Promise<string> => {
-            logDebug('func called with query', { query });
-            const client = new PgClient({
-                host: credentials.host,
-                database: credentials.database,
-                user: credentials.user,
-                password: credentials.password,
-                port: credentials.port,
-                ssl: PostgresVectorStoreTool.getSslConfig(credentials.ssl),
-            });
-
-            try {
-                logDebug('Connecting to database');
-                await client.connect();
-                logDebug('Connected to database');
-
-                if (!query) {
-                    throw new Error('Search query is missing. Please provide a query to search for.');
+                // Validate embedding model
+                if (!embeddingModel || typeof embeddingModel.embedQuery !== 'function') {
+                        throw new Error('Embedding model required. Connect an embedding node to the input.');
                 }
 
-                logDebug('Embedding query');
-                const queryVector = await embeddingModel.embedQuery(query);
-                logDebug('Query embedded successfully');
+                // Store context reference for use in tool function
+                const context = this;
 
-                if (!Array.isArray(queryVector)) {
-                    throw new Error('Embedding model did not return a valid vector array');
-                }
+                // Tool execution function
+                const toolFunc = async ({ query }: { query: string }): Promise<string> => {
+                        logger.debug('Tool called', { query });
 
-                const vectorString = `[${queryVector.join(',')}]`;
+                        // Create database client
+                        const client = new PgClient({
+                                host: credentials.host,
+                                database: credentials.database,
+                                user: credentials.user,
+                                password: credentials.password,
+                                port: credentials.port,
+                                ssl: PostgresVectorStoreTool.getSslConfig(credentials.ssl),
+                        });
 
-                let results: any[];
+                        try {
+                                // Connect to database
+                                logger.debug('Connecting to database');
+                                await client.connect();
 
-                if (operation === 'customQuery') {
-                    const sqlQuery = context.getNodeParameter('sqlQuery', itemIndex) as string;
-                    const role = undefined;
+                                // Validate query
+                                if (!query?.trim()) {
+                                        throw new Error('Search query is required');
+                                }
 
-                    logDebug('Executing custom query', { sqlQuery });
-                    results = await executeCustomQuery(client, sqlQuery, role);
-                    logDebug('Custom query executed', { resultCount: results.length });
-                } else {
-                    const tableName = context.getNodeParameter('tableName', itemIndex) as string;
-                    const includeMetadata = context.getNodeParameter('includeMetadata', itemIndex) as boolean;
-                    const topK = context.getNodeParameter('topK', itemIndex) as number;
+                                // Generate embedding vector
+                                logger.debug('Generating embedding');
+                                const vector = await embeddingModel.embedQuery(query);
 
-                    const columnNames = context.getNodeParameter('options.columnNames', itemIndex, {
-                        names: {
-                            id: 'id',
-                            vector: 'embedding',
-                            content: 'text',
-                            metadata: 'metadata',
-                        },
-                    }) as {
-                        names: {
-                            id: string;
-                            vector: string;
-                            content: string;
-                            metadata: string;
-                        };
-                    };
+                                if (!Array.isArray(vector)) {
+                                        throw new Error('Embedding model returned invalid vector');
+                                }
 
-                    const columnConfig = columnNames.names || {
-                        id: 'id',
-                        vector: 'embedding',
-                        content: 'text',
-                        metadata: 'metadata',
-                    };
+                                // Format vector for pgvector
+                                const vectorStr = `[${vector.join(',')}]`;
+                                logger.debug('Embedding generated', { dimensions: vector.length });
 
-                    const quotedTable = quoteIdentifier(tableName);
-                    const quotedId = quoteIdentifier(columnConfig.id || 'id');
-                    const quotedVector = quoteIdentifier(columnConfig.vector || 'embedding');
-                    const quotedContent = quoteIdentifier(columnConfig.content || 'text');
-                    const quotedMetadata = quoteIdentifier(columnConfig.metadata || 'metadata');
+                                let results: any[];
 
-                    const metadataSelect = includeMetadata ? `, ${quotedMetadata} AS metadata` : '';
+                                if (operation === 'customQuery') {
+                                        // Custom SQL mode
+                                        const sql = context.getNodeParameter('sqlQuery', itemIndex) as string;
+                                        logger.debug('Executing custom SQL', { sql });
 
-                    const sql = `SELECT ${quotedId} AS id, ${quotedContent} AS content${metadataSelect}
-FROM ${quotedTable}
-ORDER BY ${quotedVector} <=> $1
-LIMIT $2`;
+                                        const result = await client.query(sql, [vectorStr]);
+                                        results = result.rows;
+                                } else {
+                                        // Vector search mode
+                                        const tableName = context.getNodeParameter('tableName', itemIndex) as string;
+                                        const topK = context.getNodeParameter('topK', itemIndex) as number;
+                                        const includeMetadata = context.getNodeParameter('includeMetadata', itemIndex) as boolean;
 
-                    const role =
-                        operation === 'retrieveRls'
-                            ? PostgresVectorStoreTool.ensureValidRole(context.getNodeParameter('rlsRole', itemIndex) as string)
-                            : undefined;
+                                        // Get column configuration
+                                        const columnNames = context.getNodeParameter('options.columnNames', itemIndex, {
+                                                names: PostgresVectorStoreTool.DEFAULT_COLUMNS,
+                                        }) as { names: ColumnConfig };
+                                        const cols = columnNames.names || PostgresVectorStoreTool.DEFAULT_COLUMNS;
 
-                    const vectorPreview = vectorString.substring(0, 50) + '...';
-                    logger.info(`Executing Vector Search Query. SQL: ${sql} -- Role: ${role || 'None'} -- TopK: ${topK} -- Vector: ${vectorPreview}`);
+                                        // Build SQL query - return text field only (no id)
+                                        const metadataCol = includeMetadata ? `, ${quoteIdentifier(cols.metadata)} AS metadata` : '';
+                                        const sql = `
+                                                SELECT ${quoteIdentifier(cols.content)} AS text${metadataCol}
+                                                FROM ${quoteIdentifier(tableName)}
+                                                ORDER BY ${quoteIdentifier(cols.vector)} <=> $1
+                                                LIMIT $2
+                                        `;
 
-                    logDebug(`Executing query: ${sql}`, { role, topK });
+                                        logger.debug('Executing search', { table: tableName, topK });
+                                        const result = await client.query(sql, [vectorStr, topK]);
+                                        results = result.rows;
+                                }
 
-                    results = await executeWithRole(
-                        { client, role },
-                        async (queryClient) => {
-                            const result = await queryClient.query(sql, [vectorString, topK]);
-                            return result.rows;
-                        },
-                    );
-                    logDebug(`Query executed successfully. Got ${results.length} rows.`);
-                }
-
-                const resultPreview = results.length > 0 ? JSON.stringify(results[0]).substring(0, 200) + '...' : 'No results';
-                logDebug(`Vector search completed. Found ${results.length} results. Preview: ${resultPreview}`);
-
-                return JSON.stringify(results, null, 2);
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                const errorStack = error instanceof Error ? error.stack : undefined;
-                const errorDetails = {
-                    message: errorMessage,
-                    stack: errorStack,
-                    errorType: error?.constructor?.name,
-                    fullError: error
+                                logger.debug('Query completed', { resultCount: results.length });
+                                return JSON.stringify(results, null, 2);
+                        } catch (error) {
+                                const message = error instanceof Error ? error.message : String(error);
+                                logger.error('Execution failed', { error: message });
+                                throw new Error(`Vector search failed: ${message}`);
+                        } finally {
+                                logger.debug('Closing connection');
+                                await client.end();
+                        }
                 };
 
-                logger.error('Error during execution', errorDetails);
-                logDebug('Error during execution', errorDetails);
-                throw new Error(`Vector search failed: ${errorMessage}`);
-            } finally {
-                logDebug('Closing database connection');
-                await client.end();
-                logDebug('Database connection closed');
-            }
-        };
+                // Wrap function for n8n UI integration
+                const wrappedFunc = createWrappedToolFunc(toolFunc, {
+                        context: this,
+                        itemIndex,
+                        logger,
+                });
 
-        const wrappedFunc = createWrappedToolFunc(originalFunc, {
-            context: this,
-            itemIndex,
-            logger,
-        });
+                // Create LangChain tool
+                logger.debug('Creating tool');
+                const tool = new DynamicStructuredTool({
+                        name: 'postgres_vector_search',
+                        description: description || 'Search for similar documents in the vector database',
+                        schema: z.object({
+                                query: z.string().describe('The search query to find similar documents'),
+                        }),
+                        func: wrappedFunc,
+                });
 
-        logDebug('Creating DynamicStructuredTool with wrapped func...');
-        const tool = new DynamicStructuredTool({
-            name: 'postgres_vector_search',
-            description: description || 'Search for similar documents in the vector database',
-            schema: z.object({
-                query: z.string().describe('The search query to find similar documents'),
-            }),
-            func: wrappedFunc,
-        });
-
-        logDebug('Tool created successfully');
-
-        logDebug('Returning supply data...');
-        return {
-            response: tool,
-        };
-    }
+                logger.debug('Tool ready');
+                return { response: tool };
+        }
 }

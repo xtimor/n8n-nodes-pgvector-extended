@@ -1,5 +1,38 @@
 # Release Notes
 
+## 0.7.0 (Release Candidate)
+- **Breaking**: Removed RLS mode completely
+- **Docs**: Rewritten README - Custom SQL as main feature, added "Helps With" section, Debug Mode docs
+- **Cleanup**: Removed unused scripts, outdated documentation, temporary files
+- **Refactor**: Simplified codebase - only Regular Retrieval and Custom SQL modes
+
+## 0.6.4
+- **Docs**: Completely rewritten README - removed RLS mentions, highlighted Custom SQL as main feature
+- **Docs**: Added "Helps With" section with use cases
+- **Docs**: Added Debug Mode documentation
+
+## 0.6.3
+- **Reverted**: Removed Query field and execute() method (n8n limitation - partial execution not supported for custom AI Tools with DynamicStructuredTool)
+
+## 0.6.2
+- **Feature**: Added Query parameter and execute() method for manual execution (Execute Step button)
+
+## 0.6.1
+- **Output**: Removed id field from results
+- **Output**: Renamed content field to text
+
+## 0.6.0
+- **BREAKING**: Removed RLS Role mode - use Custom SQL for advanced use cases
+- **Refactor**: Renamed rlsHelper.ts to Helper.ts
+- **Refactor**: New MyLogger class replaces createLogDebug function
+- **Refactor**: Simplified node architecture, cleaner code
+- **Refactor**: Added comments throughout codebase
+- **UI**: Updated mode names: "Regular Retrieving" → "Vector Search"
+
+## 0.5.47
+- **UI Fix**: Embedding input now shows icon in n8n node footer (changed inputs format to object with displayName, maxConnections, required)
+- Added `outputNames: ['Tool']` for proper output labeling
+
 ## 0.5.46
 - **Fix**: Replaced proxy-based wrapper with direct func wrapping (`createWrappedToolFunc`) — now properly intercepts tool execution
 - **Feature**: n8n Output panel now correctly shows tool input/output data
