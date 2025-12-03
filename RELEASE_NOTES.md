@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.7.1
+- **Refactor**: Single execution point for all SQL queries via `executeQuery`
+- **Logging**: Full SQL query logged with substituted parameters
+- **Logging**: Query execution time in debug mode
+- **Simplify**: All errors are now critical (removed `isCriticalError` logic)
+
 ## 0.7.0 (Release Candidate)
 - **Breaking**: Removed RLS mode completely
 - **Docs**: Rewritten README - Custom SQL as main feature, added "Helps With" section, Debug Mode docs
