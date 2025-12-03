@@ -6,25 +6,6 @@ import type {
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import type { Client } from 'pg';
 
-// Patterns that indicate critical database errors requiring workflow stop
-const CRITICAL_ERROR_PATTERNS = [
-        /relation .* does not exist/i,
-        /table .* does not exist/i,
-        /column .* does not exist/i,
-        /database .* does not exist/i,
-        /permission denied/i,
-        /authentication failed/i,
-        /password authentication failed/i,
-        /connection refused/i,
-        /ECONNREFUSED/i,
-        /ENOTFOUND/i,
-        /ETIMEDOUT/i,
-        /no pg_hba\.conf entry/i,
-        /SSL.*required/i,
-        /role .* does not exist/i,
-        /Invalid identifier/i,
-];
-
 /**
  * Base logger interface matching n8n's logger
  */
@@ -85,14 +66,6 @@ export class MyLogger {
                         return `${message} | [serialization error]`;
                 }
         }
-}
-
-/**
- * Check if error is critical and should stop workflow execution
- */
-export function isCriticalError(error: unknown): boolean {
-        const message = error instanceof Error ? error.message : String(error);
-        return CRITICAL_ERROR_PATTERNS.some((pattern) => pattern.test(message));
 }
 
 /**
@@ -159,13 +132,8 @@ export function createWrappedToolFunc<TInput extends { query: string }>(
                                 [{ json: { error: errorMessage }, pairedItem: { item: itemIndex } }],
                         ]);
 
-                        // Throw NodeOperationError for critical errors to stop workflow
-                        if (isCriticalError(error)) {
-                                logger.info('[Tool] Critical error - stopping workflow');
-                                throw new NodeOperationError(context.getNode(), errorMessage, { itemIndex });
-                        }
-
-                        throw error;
+                        // All errors are critical - stop workflow
+                        throw new NodeOperationError(context.getNode(), errorMessage, { itemIndex });
                 }
         };
 }
