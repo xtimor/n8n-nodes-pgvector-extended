@@ -197,13 +197,38 @@ export function quoteIdentifier(value: string): string {
 }
 
 /**
- * Execute SQL query with proper result formatting
+ * Build full SQL query string with parameters substituted (for logging)
+ */
+function buildFullQuery(sql: string, params: unknown[]): string {
+        let fullQuery = sql;
+        params.forEach((param, index) => {
+                const placeholder = `$${index + 1}`;
+                const value = typeof param === 'string' ? `'${param}'` : String(param);
+                fullQuery = fullQuery.replace(placeholder, value);
+        });
+        return fullQuery.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Execute SQL query with logging and proper result formatting
  */
 export async function executeQuery(
         client: Client,
         sql: string,
         params: unknown[],
-): Promise<INodeExecutionData[]> {
+        logger?: MyLogger,
+): Promise<any[]> {
+        const fullQuery = buildFullQuery(sql, params);
+        logger?.debug('Executing SQL', { query: fullQuery });
+
+        const startTime = Date.now();
         const result = await client.query(sql, params);
-        return result.rows.map((row) => ({ json: row }));
+        const duration = Date.now() - startTime;
+
+        logger?.debug('Query completed', { 
+                rowCount: result.rows.length, 
+                duration: `${duration}ms` 
+        });
+
+        return result.rows;
 }

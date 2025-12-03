@@ -8,7 +8,7 @@ import { NodeConnectionTypes } from 'n8n-workflow';
 import { Client as PgClient } from 'pg';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { MyLogger, quoteIdentifier, createWrappedToolFunc } from '../../utils/Helper';
+import { MyLogger, quoteIdentifier, createWrappedToolFunc, executeQuery } from '../../utils/Helper';
 
 // PostgreSQL credentials interface
 interface PostgresCredentials {
@@ -210,7 +210,7 @@ export class PostgresVectorStoreTool implements INodeType {
                                 default: 'SELECT * FROM n8n_vectors ORDER BY embedding <=> $1 LIMIT 10',
                                 description: 'SQL query with $1 placeholder for embedding vector',
                                 placeholder:
-                                        "SELECT * FROM vectors WHERE metadata->>'type' = 'doc' ORDER BY embedding <=> $1 LIMIT 5",
+                                        "SELECT text, metadata FROM vectors ORDER BY embedding <=> $1 LIMIT 5",
                         },
                         // Debug mode for custom SQL
                         {
@@ -309,42 +309,30 @@ export class PostgresVectorStoreTool implements INodeType {
                                 const vectorStr = `[${vector.join(',')}]`;
                                 logger.debug('Embedding generated', { dimensions: vector.length });
 
-                                let results: any[];
+                                // Build SQL query based on operation mode
+                                let sql: string;
+                                let params: unknown[];
 
                                 if (operation === 'customQuery') {
-                                        // Custom SQL mode
-                                        const sql = context.getNodeParameter('sqlQuery', itemIndex) as string;
-                                        logger.debug('Executing custom SQL', { sql });
-
-                                        const result = await client.query(sql, [vectorStr]);
-                                        results = result.rows;
+                                        sql = context.getNodeParameter('sqlQuery', itemIndex) as string;
+                                        params = [vectorStr];
                                 } else {
-                                        // Vector search mode
                                         const tableName = context.getNodeParameter('tableName', itemIndex) as string;
                                         const topK = context.getNodeParameter('topK', itemIndex) as number;
                                         const includeMetadata = context.getNodeParameter('includeMetadata', itemIndex) as boolean;
 
-                                        // Get column configuration
                                         const columnNames = context.getNodeParameter('options.columnNames', itemIndex, {
                                                 names: PostgresVectorStoreTool.DEFAULT_COLUMNS,
                                         }) as { names: ColumnConfig };
                                         const cols = columnNames.names || PostgresVectorStoreTool.DEFAULT_COLUMNS;
 
-                                        // Build SQL query - return text field only (no id)
                                         const metadataCol = includeMetadata ? `, ${quoteIdentifier(cols.metadata)} AS metadata` : '';
-                                        const sql = `
-                                                SELECT ${quoteIdentifier(cols.content)} AS text${metadataCol}
-                                                FROM ${quoteIdentifier(tableName)}
-                                                ORDER BY ${quoteIdentifier(cols.vector)} <=> $1
-                                                LIMIT $2
-                                        `;
-
-                                        logger.debug('Executing search', { table: tableName, topK });
-                                        const result = await client.query(sql, [vectorStr, topK]);
-                                        results = result.rows;
+                                        sql = `SELECT ${quoteIdentifier(cols.content)} AS text${metadataCol} FROM ${quoteIdentifier(tableName)} ORDER BY ${quoteIdentifier(cols.vector)} <=> $1 LIMIT $2`;
+                                        params = [vectorStr, topK];
                                 }
 
-                                logger.debug('Query completed', { resultCount: results.length });
+                                // Execute query (single execution point with full logging)
+                                const results = await executeQuery(client, sql, params, logger);
                                 return JSON.stringify(results, null, 2);
                         } catch (error) {
                                 const message = error instanceof Error ? error.message : String(error);
